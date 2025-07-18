@@ -5,3 +5,6 @@ google-auth
 google-auth-oauthlib
 pydantic
 google-api-python-client
+pytest
+httpx
+openai

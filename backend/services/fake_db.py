@@ -13,7 +13,7 @@ def save_user_token(user_token: UserToken):
 def get_user_token(email: str) -> UserToken:
     user = users.get(email)
     if user is None:
-        raise ValueError(f"No user token found for email: {email}")
+        raise ValueError(f"User with email {email} not found")
     return user
 
 # Category management
