@@ -111,7 +111,8 @@ def process_user_emails(user_token: UserToken, categories: List[Category], max_e
             summary=summary,
             raw=body,
             user_email=user_token.email,
-            gmail_id=gmail_id
+            gmail_id=gmail_id,
+            headers=headers
         )
         save_email(email_obj)
         # Archive the email in Gmail

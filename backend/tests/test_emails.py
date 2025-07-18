@@ -78,3 +78,31 @@ def test_process_user_emails_stores_and_skips_duplicates():
         result = process_user_emails(user_token, categories, max_emails=2)
         assert len(result) == 1  # Only one email stored due to duplicate gmail_id
         assert emails[0].gmail_id == 'msg1' 
+
+def test_extract_unsubscribe_links():
+    from utils.unsubscribe import extract_unsubscribe_links
+    # Email with List-Unsubscribe header and HTML body
+    raw = (
+        'List-Unsubscribe: <https://unsubscribe.example.com/unsub>\n'
+        '<html><body>'
+        '<a href="https://unsubscribe.example.com/unsub">Unsubscribe here</a>'
+        '<a href="https://other.example.com/keep">Keep</a>'
+        'Or visit https://unsubscribe.example.com/unsub2 in your browser.'
+        '</body></html>'
+    )
+    email = Email(
+        id=123,
+        subject="Test Unsub",
+        from_email="sender@example.com",
+        category_id=1,
+        summary="summary",
+        raw=raw,
+        user_email="test@example.com",
+        gmail_id="gmailid-unsub"
+    )
+    links = extract_unsubscribe_links(email)
+    print("Extracted unsubscribe links:", links)
+    assert "https://unsubscribe.example.com/unsub" in links
+    assert "https://unsubscribe.example.com/unsub2" in links
+    # Should not include unrelated links
+    assert all("keep" not in l for l in links) 

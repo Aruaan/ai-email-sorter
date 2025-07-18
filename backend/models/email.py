@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict
 
 class Email(BaseModel):
     id: int
@@ -9,4 +9,5 @@ class Email(BaseModel):
     summary: str
     raw: str
     user_email: str
-    gmail_id: str  # Gmail message ID 
+    gmail_id: str  # Gmail message ID
+    headers: Optional[Dict[str, str]] = None 
