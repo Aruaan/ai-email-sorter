@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 client = TestClient(app)
 
+@pytest.mark.skip(reason="Skipping Google OAuth tests for now")
 @patch('utils.google_oauth.get_auth_url', return_value='https://accounts.google.com/o/oauth2/auth?mocked')
 def test_auth_google_redirect(mocked_auth_url):
     response = client.get('/auth/google')

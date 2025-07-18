@@ -8,6 +8,8 @@ from unittest.mock import patch, MagicMock
 
 
 def test_process_user_emails():
+    from services.fake_db import emails
+    emails.clear()
     user_token = UserToken(email="test@example.com", access_token="token", refresh_token="refresh")
     categories = [Category(id=1, name="Work", description="Work stuff", user_email="test@example.com")]
 
@@ -50,7 +52,7 @@ def test_process_user_emails():
         assert len(result) == 2
         for email in result:
             assert 'subject' in email
-            assert 'from' in email
+            assert 'from_email' in email
             assert 'category_id' in email
             assert 'summary' in email
             assert 'raw' in email
@@ -59,6 +61,8 @@ def test_process_user_emails():
 
 
 def test_process_user_emails_with_dummy_data():
+    from services.fake_db import emails
+    emails.clear()
     user_token = UserToken(email="test@example.com", access_token="token", refresh_token="refresh")
     categories = [Category(id=1, name="Work", description="Work stuff", user_email="test@example.com")]
 
@@ -101,7 +105,7 @@ def test_process_user_emails_with_dummy_data():
         assert len(result) == 2
         for email in result:
             assert 'subject' in email
-            assert 'from' in email
+            assert 'from_email' in email
             assert 'category_id' in email
             assert 'summary' in email
             assert 'raw' in email

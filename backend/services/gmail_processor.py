@@ -14,6 +14,9 @@ client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
 print(f"Using OpenAI model: {OPENAI_MODEL}")
 
+from services.fake_db import save_email, email_exists
+from models.email import Email
+
 def summarize_email(text: str) -> str:
     prompt = f"Summarize the following email in 1-2 sentences:\n\n{text}"
     response = client.chat.completions.create(
@@ -54,6 +57,17 @@ Which category does the email best belong to? Only return the category name.
     return -1  # fallback
 
 
+def archive_gmail_message(service, gmail_id):
+    try:
+        service.users().messages().modify(
+            userId='me',
+            id=gmail_id,
+            body={'removeLabelIds': ['INBOX']}
+        ).execute()
+    except Exception as e:
+        print(f"Failed to archive Gmail message {gmail_id}: {e}")
+
+
 def process_user_emails(user_token: UserToken, categories: List[Category], max_emails: int = 2) -> List[Dict[str, Any]]:
     creds = Credentials(
         token=user_token.access_token,
@@ -67,7 +81,10 @@ def process_user_emails(user_token: UserToken, categories: List[Category], max_e
     messages = results.get('messages', [])[:max_emails]
     processed = []
     for msg in messages:
-        msg_detail = service.users().messages().get(userId='me', id=msg['id'], format='full').execute()
+        gmail_id = msg['id']
+        if email_exists(user_token.email, gmail_id):
+            continue  # Skip already processed
+        msg_detail = service.users().messages().get(userId='me', id=gmail_id, format='full').execute()
         headers = {h['name']: h['value'] for h in msg_detail['payload'].get('headers', [])}
         subject = headers.get('Subject', '')
         sender = headers.get('From', '')
@@ -84,14 +101,20 @@ def process_user_emails(user_token: UserToken, categories: List[Category], max_e
                     break
         if not body:
             body = snippet
-        # TODO: Cache/store results to avoid duplicate OpenAI calls
         category_id = classify_email(body, categories)
         summary = summarize_email(body)
-        processed.append({
-            'subject': subject,
-            'from': sender,
-            'category_id': category_id,
-            'summary': summary,
-            'raw': body
-        })
+        email_obj = Email(
+            id=0,  # Will be set by save_email
+            subject=subject,
+            from_email=sender,
+            category_id=category_id,
+            summary=summary,
+            raw=body,
+            user_email=user_token.email,
+            gmail_id=gmail_id
+        )
+        save_email(email_obj)
+        # Archive the email in Gmail
+        archive_gmail_message(service, gmail_id)
+        processed.append(email_obj.model_dump())
     return processed 
