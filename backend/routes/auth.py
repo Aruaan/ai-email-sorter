@@ -3,6 +3,7 @@ from fastapi.responses import RedirectResponse
 from utils.google_oauth import get_auth_url, fetch_token, get_user_email
 from services.fake_db import save_user_token
 from models.user import UserToken
+import os
 
 router = APIRouter()
 
@@ -28,4 +29,8 @@ def google_callback(request: Request, code: str = "", state: str = ""):
         refresh_token=refresh_token
     )
     save_user_token(user_token)
-    return {"message": "Authentication successful", "email": email} 
+    
+    # Redirect to frontend with email
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    redirect_url = f"{frontend_url}/callback?email={email}"
+    return RedirectResponse(url=redirect_url) 
