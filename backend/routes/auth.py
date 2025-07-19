@@ -29,6 +29,7 @@ def google_callback(request: Request, code: str = "", state: str = ""):
         refresh_token=refresh_token
     )
     save_user_token(user_token)
+    print(f"Saved user token for: {email}")
     
     # Redirect to frontend with email
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")

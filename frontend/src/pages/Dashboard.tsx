@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, LogOut, Mail } from 'lucide-react'
-import { categoriesAPI } from '../services/api'
+import { Plus, LogOut, Mail, RefreshCw } from 'lucide-react'
+import { categoriesAPI, emailsAPI } from '../services/api'
 import { Category } from '../types'
 
 interface DashboardProps {
@@ -14,6 +14,9 @@ const Dashboard = ({ userEmail, onLogout }: DashboardProps) => {
   const [isLoading, setIsLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newCategory, setNewCategory] = useState({ name: '', description: '' })
+  const [isProcessingEmails, setIsProcessingEmails] = useState(false)
+  const [processingStatus, setProcessingStatus] = useState<string>('')
+  const [emailCounts, setEmailCounts] = useState<Record<number, number>>({})
 
   useEffect(() => {
     loadCategories()
@@ -23,6 +26,18 @@ const Dashboard = ({ userEmail, onLogout }: DashboardProps) => {
     try {
       const data = await categoriesAPI.getCategories(userEmail)
       setCategories(data)
+      
+      // Load email counts for each category
+      const counts: Record<number, number> = {}
+      for (const category of data) {
+        try {
+          const emails = await emailsAPI.getEmails(userEmail, category.id)
+          counts[category.id] = emails.length
+        } catch (error) {
+          counts[category.id] = 0
+        }
+      }
+      setEmailCounts(counts)
     } catch (error) {
       console.error('Failed to load categories:', error)
     } finally {
@@ -45,6 +60,32 @@ const Dashboard = ({ userEmail, onLogout }: DashboardProps) => {
       setShowCreateForm(false)
     } catch (error) {
       console.error('Failed to create category:', error)
+    }
+  }
+
+  const handleProcessEmails = async () => {
+    if (categories.length === 0) {
+      alert('Please create at least one category before processing emails.')
+      return
+    }
+
+    setIsProcessingEmails(true)
+    setProcessingStatus('Processing emails...')
+
+    try {
+      const results = await emailsAPI.processEmails(userEmail, 5)
+      setProcessingStatus(`Successfully processed ${results.length} emails!`)
+      
+      // Refresh categories to show updated email counts
+      setTimeout(() => {
+        loadCategories()
+        setProcessingStatus('')
+      }, 2000)
+    } catch (error) {
+      console.error('Failed to process emails:', error)
+      setProcessingStatus('Failed to process emails. Please try again.')
+    } finally {
+      setIsProcessingEmails(false)
     }
   }
 
@@ -78,8 +119,37 @@ const Dashboard = ({ userEmail, onLogout }: DashboardProps) => {
       </header>
 
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {/* Categories Section */}
+        {/* Email Processing Section */}
         <div className="px-4 py-6 sm:px-0">
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-medium text-gray-900">Email Processing</h2>
+                <p className="text-sm text-gray-600">
+                  Process and categorize your Gmail inbox using AI
+                </p>
+              </div>
+              <button
+                onClick={handleProcessEmails}
+                disabled={isProcessingEmails || categories.length === 0}
+                className="flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {isProcessingEmails ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Mail className="w-4 h-4 mr-2" />
+                )}
+                {isProcessingEmails ? 'Processing...' : 'Process Emails'}
+              </button>
+            </div>
+            {processingStatus && (
+              <div className="mt-4 p-3 bg-blue-50 rounded-md">
+                <p className="text-sm text-blue-800">{processingStatus}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Categories Section */}
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-gray-900">Categories</h2>
             <button
@@ -148,13 +218,20 @@ const Dashboard = ({ userEmail, onLogout }: DashboardProps) => {
                 to={`/category/${category.id}`}
                 className="block p-6 bg-white rounded-lg shadow hover:shadow-md transition-shadow"
               >
-                <div className="flex items-center">
-                  <Mail className="w-8 h-8 text-blue-600" />
-                  <div className="ml-4">
-                    <h3 className="text-lg font-medium text-gray-900">{category.name}</h3>
-                    {category.description && (
-                      <p className="text-sm text-gray-600 mt-1">{category.description}</p>
-                    )}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Mail className="w-8 h-8 text-blue-600" />
+                    <div className="ml-4">
+                      <h3 className="text-lg font-medium text-gray-900">{category.name}</h3>
+                      {category.description && (
+                        <p className="text-sm text-gray-600 mt-1">{category.description}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {emailCounts[category.id] || 0} emails
+                    </span>
                   </div>
                 </div>
               </Link>

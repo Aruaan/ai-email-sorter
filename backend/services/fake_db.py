@@ -12,8 +12,10 @@ _email_id_counter = 1
 # User token management
 def save_user_token(user_token: UserToken):
     users[user_token.email] = user_token
+    print(f"Saved user token for {user_token.email}. Total users: {len(users)}")
 
 def get_user_token(email: str) -> UserToken:
+    print(f"Looking for user token: {email}. Available users: {list(users.keys())}")
     user = users.get(email)
     if user is None:
         raise ValueError(f"User with email {email} not found")

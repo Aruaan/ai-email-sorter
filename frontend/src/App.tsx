@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom'
+import { Routes, Route, Navigate, useSearchParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -6,17 +6,20 @@ import CategoryView from './pages/CategoryView'
 
 function CallbackHandler({ onLogin }: { onLogin: (email: string) => void }) {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   
   useEffect(() => {
     const email = searchParams.get('email')
     
     if (email) {
       onLogin(email)
+      // Navigate to dashboard after login
+      navigate('/', { replace: true })
     } else {
       // Fallback: redirect to login if no email
-      window.location.href = '/login'
+      navigate('/login', { replace: true })
     }
-  }, [searchParams, onLogin])
+  }, [searchParams, onLogin, navigate])
 
   return (
     <div className="min-h-screen flex items-center justify-center">
