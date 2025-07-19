@@ -40,13 +40,16 @@ def extract_unsubscribe_links(email: Email) -> List[str]:
                 if 'unsubscribe' in text.lower() or 'unsubscribe' in str(href).lower():
                     links.add(str(href))
     # 5. Parse plain text for unsubscribe URLs
-    # Remove HTML if present to avoid duplicate extraction
-    plain = email.raw
-    if html:
-        plain = re.sub(r'<html[\s\S]*?</html>', '', plain, flags=re.IGNORECASE)
-    url_regex = r'https?://\S+'
-    for match in re.findall(url_regex, plain):
+    # First, extract URLs from the entire raw content before removing HTML
+    url_regex = r'https?://[^\s<>"{}|\\^`\[\]]+'
+    for match in re.findall(url_regex, email.raw):
         url = unquote(match)
         if 'unsubscribe' in url.lower():
             links.add(url)
+    
+    # Debug: print what we found
+    print(f"Debug - Raw email: {email.raw[:200]}...")
+    print(f"Debug - All URLs found: {[unquote(match) for match in re.findall(url_regex, email.raw)]}")
+    print(f"Debug - Final links: {list(links)}")
+    
     return list(links) 

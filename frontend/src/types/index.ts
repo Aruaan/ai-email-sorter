@@ -21,4 +21,22 @@ export interface UnsubscribeResult {
   email_id: number
   unsubscribe_links: string[]
   error?: string
+}
+
+export interface UserToken {
+  email: string;
+  access_token: string;
+  refresh_token?: string;
+}
+
+export interface UserSession {
+  session_id: string;
+  accounts: UserToken[];
+  primary_account: string;
+}
+
+export interface SessionInfo {
+  session_id: string;
+  accounts: { email: string }[];
+  primary_account: string;
 } 

@@ -69,53 +69,83 @@ def archive_gmail_message(service, gmail_id):
 
 
 def process_user_emails(user_token: UserToken, categories: List[Category], max_emails: int = 2) -> List[Dict[str, Any]]:
-    creds = Credentials(
-        token=user_token.access_token,
-        refresh_token=user_token.refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=None,
-        client_secret=None
-    )
-    service = build('gmail', 'v1', credentials=creds)
-    results = service.users().messages().list(userId='me', labelIds=['INBOX'], maxResults=max_emails).execute()
-    messages = results.get('messages', [])[:max_emails]
-    processed = []
-    for msg in messages:
-        gmail_id = msg['id']
-        if email_exists(user_token.email, gmail_id):
-            continue  # Skip already processed
-        msg_detail = service.users().messages().get(userId='me', id=gmail_id, format='full').execute()
-        headers = {h['name']: h['value'] for h in msg_detail['payload'].get('headers', [])}
-        subject = headers.get('Subject', '')
-        sender = headers.get('From', '')
-        snippet = msg_detail.get('snippet', '')
-        # Try to get plain text body
-        body = ''
-        parts = msg_detail['payload'].get('parts', [])
-        for part in parts:
-            if part.get('mimeType') == 'text/plain':
-                data = part['body'].get('data')
-                if data:
-                    import base64
-                    body = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
-                    break
-        if not body:
-            body = snippet
-        category_id = classify_email(body, categories)
-        summary = summarize_email(body)
-        email_obj = Email(
-            id=0,  # Will be set by save_email
-            subject=subject,
-            from_email=sender,
-            category_id=category_id,
-            summary=summary,
-            raw=body,
-            user_email=user_token.email,
-            gmail_id=gmail_id,
-            headers=headers
+    try:
+        print(f"Processing emails for user: {user_token.email}")
+        creds = Credentials(
+            token=user_token.access_token,
+            refresh_token=user_token.refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=None,
+            client_secret=None
         )
-        save_email(email_obj)
-        # Archive the email in Gmail
-        archive_gmail_message(service, gmail_id)
-        processed.append(email_obj.model_dump())
-    return processed 
+        service = build('gmail', 'v1', credentials=creds)
+        
+        # Get messages from inbox
+        results = service.users().messages().list(userId='me', labelIds=['INBOX'], maxResults=max_emails).execute()
+        messages = results.get('messages', [])
+        print(f"Found {len(messages)} messages in inbox for {user_token.email}")
+        
+        if not messages:
+            print(f"No messages found in inbox for {user_token.email}")
+            return []
+        
+        messages = messages[:max_emails]
+        processed = []
+        
+        for msg in messages:
+            try:
+                gmail_id = msg['id']
+                if email_exists(user_token.email, gmail_id):
+                    print(f"Email {gmail_id} already processed for {user_token.email}")
+                    continue  # Skip already processed
+                
+                msg_detail = service.users().messages().get(userId='me', id=gmail_id, format='full').execute()
+                headers = {h['name']: h['value'] for h in msg_detail['payload'].get('headers', [])}
+                subject = headers.get('Subject', '')
+                sender = headers.get('From', '')
+                snippet = msg_detail.get('snippet', '')
+                
+                # Try to get plain text body
+                body = ''
+                parts = msg_detail['payload'].get('parts', [])
+                for part in parts:
+                    if part.get('mimeType') == 'text/plain':
+                        data = part['body'].get('data')
+                        if data:
+                            import base64
+                            body = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
+                            break
+                if not body:
+                    body = snippet
+                
+                category_id = classify_email(body, categories)
+                summary = summarize_email(body)
+                
+                email_obj = Email(
+                    id=0,  # Will be set by save_email
+                    subject=subject,
+                    from_email=sender,
+                    category_id=category_id,
+                    summary=summary,
+                    raw=body,
+                    user_email=user_token.email,
+                    gmail_id=gmail_id,
+                    headers=headers
+                )
+                save_email(email_obj)
+                print(f"Saved email: {subject} for {user_token.email}")
+                
+                # Archive the email in Gmail
+                archive_gmail_message(service, gmail_id)
+                processed.append(email_obj.model_dump())
+                
+            except Exception as e:
+                print(f"Error processing message {msg.get('id', 'unknown')} for {user_token.email}: {e}")
+                continue
+        
+        print(f"Successfully processed {len(processed)} emails for {user_token.email}")
+        return processed
+        
+    except Exception as e:
+        print(f"Error in process_user_emails for {user_token.email}: {e}")
+        raise e 
