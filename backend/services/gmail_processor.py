@@ -5,6 +5,7 @@ from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 import openai
 import os
+import base64
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -17,8 +18,21 @@ print(f"Using OpenAI model: {OPENAI_MODEL}")
 from services.fake_db import save_email, email_exists
 from models.email import Email
 
-def summarize_email(text: str) -> str:
-    prompt = f"Summarize the following email in 1-2 sentences:\n\n{text}"
+def summarize_email(subject: str, sender: str, recipient: str, text: str, categories: list) -> str:
+    category_descriptions = "\n".join([f"{c.name}: {c.description}" for c in categories])
+    prompt = f"""
+Summarize the following email in 1-2 sentences, focusing on what it's about and who it's for. Use the subject, sender, and recipient for context. Then, suggest which of these categories it best fits, based on their descriptions:
+
+Subject: {subject}
+From: {sender}
+To: {recipient}
+
+Email body:
+{text}
+
+Categories:
+{category_descriptions}
+"""
     response = client.chat.completions.create(
         model=OPENAI_MODEL,
         messages=[{"role": "user", "content": prompt}],
@@ -59,16 +73,48 @@ Which category does the email best belong to? Only return the category name.
 
 def archive_gmail_message(service, gmail_id):
     try:
-        service.users().messages().modify(
+        resp = service.users().messages().modify(
             userId='me',
             id=gmail_id,
             body={'removeLabelIds': ['INBOX']}
         ).execute()
+        print(f"Archived Gmail message {gmail_id}: {resp}")
     except Exception as e:
-        print(f"Failed to archive Gmail message {gmail_id}: {e}")
+        # If the error is 'notFound', treat as non-fatal (already archived or deleted)
+        if 'not found' in str(e).lower() or 'notfound' in str(e).lower():
+            print(f"Gmail message {gmail_id} not found (may already be archived or deleted). Treating as non-fatal.")
+        else:
+            print(f"Failed to archive Gmail message {gmail_id}: {e}")
 
 
-def process_user_emails(user_token: UserToken, categories: List[Category], max_emails: int = 2) -> List[Dict[str, Any]]:
+def get_latest_history_id(service) -> str:
+    # Get the latest historyId from Gmail profile
+    profile = service.users().getProfile(userId='me').execute()
+    return profile.get('historyId')
+
+
+def get_new_message_ids(service, last_history_id: str) -> list:
+    # Use Gmail history API to get new message IDs since last_history_id
+    new_message_ids = set()
+    page_token = None
+    while True:
+        history = service.users().history().list(
+            userId='me',
+            startHistoryId=last_history_id,
+            historyTypes=['messageAdded'],
+            pageToken=page_token
+        ).execute()
+        for h in history.get('history', []):
+            for msg in h.get('messagesAdded', []):
+                msg_id = msg['message']['id']
+                new_message_ids.add(msg_id)
+        page_token = history.get('nextPageToken')
+        if not page_token:
+            break
+    return list(new_message_ids)
+
+
+def process_user_emails(user_token: UserToken, categories: List[Category], max_emails: int = 10, last_history_id: str = "") -> List[dict]:
     try:
         print(f"Processing emails for user: {user_token.email}")
         creds = Credentials(
@@ -79,50 +125,56 @@ def process_user_emails(user_token: UserToken, categories: List[Category], max_e
             client_secret=None
         )
         service = build('gmail', 'v1', credentials=creds)
-        
-        # Get messages from inbox
-        results = service.users().messages().list(userId='me', labelIds=['INBOX'], maxResults=max_emails).execute()
-        messages = results.get('messages', [])
-        print(f"Found {len(messages)} messages in inbox for {user_token.email}")
-        
-        if not messages:
-            print(f"No messages found in inbox for {user_token.email}")
+
+        if not categories:
+            print(f"No categories found for user: {user_token.email}. Skipping processing.")
             return []
+
+        # All users should have a history ID from when they first connected
+        # If somehow they don't, set it up now
+        if not last_history_id:
+            print("No last_history_id found - this shouldn't happen in production. Setting up now.")
+            from services.fake_db import set_history_id_by_email
+            current_history_id = get_latest_history_id(service)
+            set_history_id_by_email(user_token.email, current_history_id)
+            print(f"Set initial history_id for {user_token.email} to {current_history_id}")
+            return []  # Don't process any emails on first setup
         
-        messages = messages[:max_emails]
+        # Process new messages since last known history_id
+        new_message_ids = get_new_message_ids(service, last_history_id)
+        print(f"Found {len(new_message_ids)} new messages for {user_token.email}")
+
         processed = []
-        
-        for msg in messages:
+
+        for gmail_id in new_message_ids[:max_emails]:
             try:
-                gmail_id = msg['id']
                 if email_exists(user_token.email, gmail_id):
                     print(f"Email {gmail_id} already processed for {user_token.email}")
-                    continue  # Skip already processed
-                
+                    continue
                 msg_detail = service.users().messages().get(userId='me', id=gmail_id, format='full').execute()
+                label_ids = msg_detail.get('labelIds', [])
+                if 'INBOX' not in label_ids or 'SENT' in label_ids or 'DRAFT' in label_ids:
+                    print(f"Skipping message {gmail_id}: not a received inbox message.")
+                    continue
                 headers = {h['name']: h['value'] for h in msg_detail['payload'].get('headers', [])}
                 subject = headers.get('Subject', '')
                 sender = headers.get('From', '')
+                recipient = headers.get('To', '') or headers.get('Delivered-To', '')
                 snippet = msg_detail.get('snippet', '')
-                
-                # Try to get plain text body
                 body = ''
                 parts = msg_detail['payload'].get('parts', [])
                 for part in parts:
                     if part.get('mimeType') == 'text/plain':
                         data = part['body'].get('data')
                         if data:
-                            import base64
                             body = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
                             break
                 if not body:
                     body = snippet
-                
                 category_id = classify_email(body, categories)
-                summary = summarize_email(body)
-                
+                summary = summarize_email(subject, sender, recipient, body, categories)
                 email_obj = Email(
-                    id=0,  # Will be set by save_email
+                    id=0,
                     subject=subject,
                     from_email=sender,
                     category_id=category_id,
@@ -133,19 +185,15 @@ def process_user_emails(user_token: UserToken, categories: List[Category], max_e
                     headers=headers
                 )
                 save_email(email_obj)
-                print(f"Saved email: {subject} for {user_token.email}")
-                
-                # Archive the email in Gmail
+                print(f"Saved email: {subject} for {user_token.email} (category_id: {category_id})")
                 archive_gmail_message(service, gmail_id)
                 processed.append(email_obj.model_dump())
-                
             except Exception as e:
-                print(f"Error processing message {msg.get('id', 'unknown')} for {user_token.email}: {e}")
+                print(f"Error processing message {gmail_id} for {user_token.email}: {e}")
                 continue
-        
-        print(f"Successfully processed {len(processed)} emails for {user_token.email}")
+
         return processed
-        
+
     except Exception as e:
         print(f"Error in process_user_emails for {user_token.email}: {e}")
-        raise e 
+        raise e

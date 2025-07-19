@@ -3,6 +3,7 @@ from models.category import Category
 from models.user import UserToken, UserSession
 from models.email import Email
 import uuid
+import os
 
 # In-memory stores
 user_sessions: Dict[str, UserSession] = {}  # session_id -> UserSession
@@ -10,13 +11,61 @@ categories: List[Category] = []
 emails: List[Email] = []
 _email_id_counter = 1
 
+# Gmail watch management
+def setup_gmail_watch_for_user(email: str, access_token: str, refresh_token: str) -> Optional[str]:
+    """
+    Set up Gmail watch for a user and return the history ID
+    This should be called when a user first connects their Gmail
+    """
+    try:
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        
+        # Create credentials
+        creds = Credentials(
+            token=access_token,
+            refresh_token=refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=None,
+            client_secret=None
+        )
+        
+        # Build Gmail service
+        service = build('gmail', 'v1', credentials=creds)
+        
+        # Get current profile to get the history ID
+        profile = service.users().getProfile(userId='me').execute()
+        current_history_id = profile.get('historyId')
+        
+        # Set up Gmail watch
+        topic_name = os.getenv("GMAIL_PUBSUB_TOPIC")
+        if not topic_name:
+            print("Warning: GMAIL_PUBSUB_TOPIC not set, skipping watch setup")
+            return current_history_id
+        
+        request_body = {
+            "topicName": topic_name,
+            "labelIds": ["INBOX"],
+            "labelFilterAction": "include"
+        }
+        
+        watch_response = service.users().watch(userId='me', body=request_body).execute()
+        print(f"Gmail watch setup for {email}: {watch_response}")
+        
+        return current_history_id
+        
+    except Exception as e:
+        print(f"Error setting up Gmail watch for {email}: {e}")
+        return None
+
 # User session management
-def create_user_session(primary_email: str, access_token: str, refresh_token: Optional[str] = None) -> str:
+def create_user_session(primary_email: str, access_token: str, refresh_token: Optional[str] = None, history_id: Optional[str] = None) -> str:
     session_id = str(uuid.uuid4())
     primary_account = UserToken(
         email=primary_email,
         access_token=access_token,
-        refresh_token=refresh_token
+        refresh_token=refresh_token,
+        history_id=history_id
     )
     user_session = UserSession(
         session_id=session_id,
@@ -30,7 +79,7 @@ def create_user_session(primary_email: str, access_token: str, refresh_token: Op
 def get_user_session(session_id: str) -> Optional[UserSession]:
     return user_sessions.get(session_id)
 
-def add_account_to_session(session_id: str, email: str, access_token: str, refresh_token: Optional[str] = None) -> bool:
+def add_account_to_session(session_id: str, email: str, access_token: str, refresh_token: Optional[str] = None, history_id: Optional[str] = None) -> bool:
     session = user_sessions.get(session_id)
     if not session:
         return False
@@ -41,6 +90,8 @@ def add_account_to_session(session_id: str, email: str, access_token: str, refre
             # Update existing account tokens
             account.access_token = access_token
             account.refresh_token = refresh_token
+            if history_id is not None:
+                account.history_id = history_id
             print(f"Updated tokens for {email} in session {session_id}")
             return True
     
@@ -48,7 +99,8 @@ def add_account_to_session(session_id: str, email: str, access_token: str, refre
     new_account = UserToken(
         email=email,
         access_token=access_token,
-        refresh_token=refresh_token
+        refresh_token=refresh_token,
+        history_id=history_id
     )
     session.accounts.append(new_account)
     print(f"Added account {email} to session {session_id}")
@@ -108,12 +160,35 @@ def get_user_token_by_email(email: str) -> Optional[UserToken]:
                 return account
     return None
 
+def get_history_id_by_email(email: str) -> Optional[str]:
+    for session in user_sessions.values():
+        for account in session.accounts:
+            if account.email == email:
+                return account.history_id
+    return None
+
+def set_history_id_by_email(email: str, history_id: str) -> bool:
+    for session in user_sessions.values():
+        for account in session.accounts:
+            if account.email == email:
+                account.history_id = history_id
+                print(f"Set history_id for {email} to {history_id}")
+                return True
+    return False
+
 # Category management
 def add_category(category: Category):
     categories.append(category)
 
 def get_categories_by_user(email: str) -> List[Category]:
     return [cat for cat in categories if cat.user_email == email]
+
+def get_categories_by_session(session_id: str) -> List[Category]:
+    session = user_sessions.get(session_id)
+    if not session:
+        return []
+    account_emails = {acc.email for acc in session.accounts}
+    return [cat for cat in categories if cat.user_email in account_emails]
 
 def save_email(email: Email):
     global _email_id_counter

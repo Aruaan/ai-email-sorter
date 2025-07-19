@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, Response, status, Query
 from fastapi.responses import RedirectResponse
 from utils.google_oauth import get_auth_url, fetch_token, get_user_email
-from services.fake_db import create_user_session, add_account_to_session, get_user_session, get_session_accounts, set_primary_account
+from services.fake_db import create_user_session, add_account_to_session, get_user_session, get_session_accounts, set_primary_account, setup_gmail_watch_for_user
 from models.user import UserToken
 import os
 
@@ -35,7 +35,9 @@ def google_callback(request: Request, code: str = "", state: str = ""):
     # Check if this is adding an account to existing session
     if state and state.startswith("add_account:"):
         session_id = state.split(":", 1)[1]
-        success = add_account_to_session(session_id, email, access_token, refresh_token)
+        # Set up Gmail watch for the new account
+        history_id = setup_gmail_watch_for_user(email, access_token, refresh_token)
+        success = add_account_to_session(session_id, email, access_token, refresh_token, history_id)
         if success:
             frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
             redirect_url = f"{frontend_url}/dashboard?session_id={session_id}&account_added={email}"
@@ -44,7 +46,9 @@ def google_callback(request: Request, code: str = "", state: str = ""):
             return Response(content="Failed to add account to session", status_code=status.HTTP_400_BAD_REQUEST)
     
     # Create new session for first-time login
-    session_id = create_user_session(email, access_token, refresh_token)
+    # Set up Gmail watch and get initial history ID
+    history_id = setup_gmail_watch_for_user(email, access_token, refresh_token)
+    session_id = create_user_session(email, access_token, refresh_token, history_id)
     
     # Redirect to frontend with session info
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")

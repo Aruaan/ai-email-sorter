@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, LogOut, Trash2, Mail, ExternalLink, X, CheckSquare, Square } from 'lucide-react'
 import { emailsAPI } from '../services/api'
 import { Email, UnsubscribeResult, SessionInfo } from '../types'
-import { useAccount } from '../contexts/AccountContext'
 
 interface CategoryViewProps {
   userEmail: string;
@@ -14,13 +13,14 @@ interface CategoryViewProps {
 const CategoryView = ({ userEmail, sessionId, sessionInfo }: CategoryViewProps) => {
   const { categoryId } = useParams<{ categoryId: string }>();
   const navigate = useNavigate();
-  const { activeAccount } = useAccount();
   const [emails, setEmails] = useState<Email[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedEmails, setSelectedEmails] = useState<Set<number>>(new Set());
   const [unsubscribeResults, setUnsubscribeResults] = useState<UnsubscribeResult[]>([]);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastTimeout, setToastTimeout] = useState<number | null>(null);
 
   useEffect(() => {
     if (categoryId) {
@@ -35,6 +35,10 @@ const CategoryView = ({ userEmail, sessionId, sessionInfo }: CategoryViewProps) 
       setIsLoading(true);
       const data = await emailsAPI.getEmails(userEmail, parseInt(categoryId));
       setEmails(data);
+      setToastMessage(`Loaded ${data.length} email(s) in this category.`);
+      if (toastTimeout) clearTimeout(toastTimeout);
+      const timeout = window.setTimeout(() => setToastMessage(null), 3000);
+      setToastTimeout(timeout);
     } catch (error) {
       console.error('Failed to load emails:', error);
     } finally {
@@ -156,6 +160,22 @@ const CategoryView = ({ userEmail, sessionId, sessionInfo }: CategoryViewProps) 
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        {/* Toast Banner */}
+        {toastMessage && (
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded shadow-lg z-50 transition-all">
+            {toastMessage}
+          </div>
+        )}
+        {/* Refresh Button */}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={loadEmails}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+          >
+            <Mail className="w-4 h-4" />
+            <span>Refresh</span>
+          </button>
+        </div>
         {/* Bulk Actions */}
         {selectedEmails.size > 0 && (
           <div className="bg-white shadow rounded-lg p-4 mb-6">
