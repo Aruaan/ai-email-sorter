@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, LogOut, Trash2, Mail, ExternalLink } from 'lucide-react'
+import { ArrowLeft, LogOut, Trash2, Mail, ExternalLink, X } from 'lucide-react'
 import { emailsAPI } from '../services/api'
 import { Email, UnsubscribeResult } from '../types'
 
@@ -15,6 +15,8 @@ const CategoryView = ({ userEmail, onLogout }: CategoryViewProps) => {
   const [isLoading, setIsLoading] = useState(true)
   const [selectedEmails, setSelectedEmails] = useState<Set<number>>(new Set())
   const [unsubscribeResults, setUnsubscribeResults] = useState<UnsubscribeResult[]>([])
+  const [selectedEmail, setSelectedEmail] = useState<Email | null>(null)
+  const [showEmailModal, setShowEmailModal] = useState(false)
 
   useEffect(() => {
     if (categoryId) {
@@ -78,6 +80,42 @@ const CategoryView = ({ userEmail, onLogout }: CategoryViewProps) => {
     console.log('Deleting emails:', Array.from(selectedEmails))
     alert('Delete functionality will be implemented later')
   }
+
+  const handleEmailClick = (email: Email) => {
+    setSelectedEmail(email)
+    setShowEmailModal(true)
+  }
+
+  const closeEmailModal = () => {
+    setShowEmailModal(false)
+    setSelectedEmail(null)
+  }
+
+  const handleModalBackgroundClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      closeEmailModal()
+    }
+  }
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && showEmailModal) {
+      closeEmailModal()
+    }
+  }
+
+  useEffect(() => {
+    if (showEmailModal) {
+      document.addEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = 'hidden' // Prevent background scrolling
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = 'unset'
+    }
+  }, [showEmailModal])
 
   if (isLoading) {
     return (
@@ -163,13 +201,17 @@ const CategoryView = ({ userEmail, onLogout }: CategoryViewProps) => {
             {emails.map((email) => (
               <div
                 key={email.id}
-                className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow"
+                className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => handleEmailClick(email)}
               >
                 <div className="flex items-start space-x-4">
                   <input
                     type="checkbox"
                     checked={selectedEmails.has(email.id)}
-                    onChange={() => handleSelectEmail(email.id)}
+                    onChange={(e) => {
+                      e.stopPropagation()
+                      handleSelectEmail(email.id)
+                    }}
                     className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   <div className="flex-1">
@@ -225,6 +267,50 @@ const CategoryView = ({ userEmail, onLogout }: CategoryViewProps) => {
           )}
         </div>
       </div>
+
+      {/* Email Modal */}
+      {showEmailModal && selectedEmail && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={handleModalBackgroundClick}
+        >
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-semibold text-gray-900">Email Details</h2>
+              <button
+                onClick={closeEmailModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    {selectedEmail.subject}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    From: {selectedEmail.from_email}
+                  </p>
+                </div>
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Summary</h4>
+                  <p className="text-gray-700 mb-4">{selectedEmail.summary}</p>
+                </div>
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Full Content</h4>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">
+                      {selectedEmail.raw}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

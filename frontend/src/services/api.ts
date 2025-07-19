@@ -48,7 +48,7 @@ export const emailsAPI = {
     return response.data
   },
 
-  processEmails: async (userEmail: string, maxEmails: number = 5): Promise<any[]> => {
+  processEmails: async (userEmail: string, maxEmails: number = 2): Promise<any[]> => {
     const response = await api.get(`/dev/process-emails?user_email=${encodeURIComponent(userEmail)}&max_emails=${maxEmails}`)
     return response.data
   }
