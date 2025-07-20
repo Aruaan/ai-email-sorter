@@ -8,15 +8,25 @@ router = APIRouter()
 
 @router.get("/", response_model=List[Email])
 def list_emails(session_id: str = Query(...), category_id: int = Query(...)):
-    # Get all accounts in the session
     accounts = get_session_accounts(session_id)
     if not accounts:
         return []
-    # Gather all emails for all accounts in this session for the given category
     all_emails = []
     for account in accounts:
         all_emails.extend(get_emails_by_user_and_category(account.email, category_id))
-    return all_emails
+    # Convert to Pydantic models
+    return [Email(
+        id=e.id,
+        subject=e.subject,
+        from_email=e.from_email,
+        category_id=e.category_id,
+        summary=e.summary,
+        raw=e.raw,
+        user_email=e.user_email,
+        gmail_id=e.gmail_id,
+        headers=getattr(e, 'headers', None)
+    ) for e in all_emails]
+
 @router.post("/unsubscribe")
 def unsubscribe_from_emails(email_ids: list = Body(...)):
     results = []

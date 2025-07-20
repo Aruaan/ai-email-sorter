@@ -4,6 +4,8 @@ from models.user import UserToken, UserSession
 from models.email import Email
 import uuid
 import os
+from database.db import SessionLocal
+from database.models import Category as DBCategory, Email as DBEmail
 
 # In-memory stores
 user_sessions: Dict[str, UserSession] = {}  # session_id -> UserSession
@@ -176,21 +178,48 @@ def set_history_id_by_email(email: str, history_id: str) -> bool:
                 return True
     return False
 
-# Category management
-def add_category(category: Category):
-    categories.append(category)
+# Category management (SQLAlchemy)
+def add_category(category):
+    db = SessionLocal()
+    db_category = DBCategory(
+        name=category.name,
+        description=category.description,
+        session_id=category.session_id
+    )
+    db.add(db_category)
+    db.commit()
+    db.refresh(db_category)
+    db.close()
+    return db_category
 
-def get_categories_by_session(session_id: str) -> List[Category]:
-    return [cat for cat in categories if cat.session_id == session_id]
+def get_categories_by_session(session_id: str):
+    db = SessionLocal()
+    cats = db.query(DBCategory).filter(DBCategory.session_id == session_id).all()
+    db.close()
+    return cats
 
-def save_email(email: Email):
-    global _email_id_counter
-    email.id = _email_id_counter
-    _email_id_counter += 1
-    emails.append(email)
+def save_email(email):
+    db = SessionLocal()
+    db_email = DBEmail(
+        subject=email.subject,
+        from_email=email.from_email,
+        category_id=email.category_id,
+        summary=email.summary,
+        raw=email.raw,
+        user_email=email.user_email,
+        gmail_id=email.gmail_id
+    )
+    db.add(db_email)
+    db.commit()
+    db.refresh(db_email)
+    db.close()
+    return db_email
 
-def get_emails_by_user_and_category(user_email: str, category_id: int) -> List[Email]:
-    return [e for e in emails if e.user_email == user_email and e.category_id == category_id]
+def get_emails_by_user_and_category(user_email: str, category_id: int):
+    db = SessionLocal()
+    emails = db.query(DBEmail).filter(DBEmail.user_email == user_email, DBEmail.category_id == category_id).all()
+    db.close()
+    return emails
 
 def email_exists(user_email: str, gmail_id: str) -> bool:
     return any(e for e in emails if e.user_email == user_email and e.gmail_id == gmail_id) 

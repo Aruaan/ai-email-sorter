@@ -9,3 +9,5 @@ pytest
 httpx
 openai
 beautifulsoup4
+psycopg2-binary
+sqlalchemy

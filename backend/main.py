@@ -1,14 +1,15 @@
+from dotenv import load_dotenv
 from httpx import request
 import uvicorn
 from fastapi import FastAPI, Query, Request, Header, Body
-from dotenv import load_dotenv
 import os
 from fastapi.middleware.cors import CORSMiddleware
 from services.fake_db import get_user_token, get_categories_by_session, get_primary_account, get_session_accounts, create_user_session, add_account_to_session, get_user_token_by_email, get_history_id_by_email, set_history_id_by_email
-from services.gmail_processor import process_user_emails, get_latest_history_id
-import base64
-import json
+from services.gmail_processor import process_user_emails
 import logging
+from database.db import engine, Base
+from database.models import Category, Email
+
 
 # Load environment variables from .env
 load_dotenv()
@@ -21,7 +22,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+Base.metadata.create_all(bind=engine)
 # Import and include routers
 from routes.auth import router as auth_router
 from routes.categories import router as categories_router

@@ -24,9 +24,21 @@ def create_category(
         description=description,
         session_id=session_id
     )
-    add_category(category)
-    return category
+    db_cat = add_category(category)
+    # Return as Pydantic model
+    return Category(
+        id=db_cat.id,
+        name=db_cat.name,
+        description=db_cat.description,
+        session_id=db_cat.session_id
+    )
 
 @router.get("/", response_model=List[Category])
 def list_categories(session_id: str = Query(...)):
-    return get_categories_by_session(session_id)
+    db_cats = get_categories_by_session(session_id)
+    return [Category(
+        id=cat.id,
+        name=cat.name,
+        description=cat.description,
+        session_id=cat.session_id
+    ) for cat in db_cats]
