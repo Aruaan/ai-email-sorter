@@ -17,8 +17,9 @@ export const authAPI = {
   addAccount: (sessionId: string) => {
     window.location.href = `/api/auth/google/add-account?session_id=${sessionId}`;
   },
-  getSessionInfo: (sessionId: string): Promise<SessionInfo> => {
-    return api.get(`/auth/session/${sessionId}`).then(res => res.data);
+  getSessionInfo: async (sessionId: string): Promise<SessionInfo> => {
+    const res = await api.get(`/auth/session/${sessionId}`);
+    return res.data;
   },
   setPrimaryAccount: (sessionId: string, email: string) => {
     return api.post(`/auth/session/${sessionId}/primary?email=${email}`);
@@ -27,32 +28,38 @@ export const authAPI = {
 
 // Categories API
 export const categoriesAPI = {
-  getCategories: (userEmail: string): Promise<Category[]> => {
-    return api.get(`/categories/?user_email=${userEmail}`).then(res => res.data);
+  getCategories: async (sessionId: string): Promise<Category[]> => {
+    const res = await api.get(`/categories/?session_id=${sessionId}`);
+    return res.data;
   },
-  createCategory: (name: string, description: string, userEmail: string): Promise<Category> => {
-    return api.post('/categories/', { name, description, user_email: userEmail }).then(res => res.data);
+  createCategory: async (name: string, description: string, sessionId: string): Promise<Category> => {
+    const res = await api.post('/categories/', { name, description, session_id: sessionId });
+    return res.data;
   }
 };
 
 // Emails API
 export const emailsAPI = {
-  getEmails: (userEmail: string, categoryId: number): Promise<Email[]> => {
-    return api.get(`/emails/?user_email=${userEmail}&category_id=${categoryId}`).then(res => res.data);
+  getEmails: async (sessionId: string, categoryId: number): Promise<Email[]> => {
+    const res = await api.get(`/emails/?session_id=${sessionId}&category_id=${categoryId}`);
+    return res.data;
   },
-  getUnsubscribeLinks: (emailIds: number[]): Promise<UnsubscribeResult[]> => {
-    return api.post('/emails/unsubscribe', emailIds).then(res => res.data);
+  getUnsubscribeLinks: async (emailIds: number[]): Promise<UnsubscribeResult[]> => {
+    const res = await api.post('/emails/unsubscribe', emailIds);
+    return res.data;
   },
-  processEmails: (sessionId: string, email?: string, maxEmails: number = 2) => {
+  processEmails: async (sessionId: string, email?: string, maxEmails: number = 2) => {
     const params = new URLSearchParams({ session_id: sessionId, max_emails: maxEmails.toString() });
     if (email) params.append('email', email);
-    return api.get(`/dev/process-emails?${params}`).then(res => res.data);
+    const res = await api.get(`/dev/process-emails?${params}`);
+    return res.data;
   }
 };
 
 // Session Management API
 export const sessionAPI = {
-  getSessionAccounts: (sessionId: string) => {
-    return api.get(`/dev/session/${sessionId}/accounts`).then(res => res.data);
+  getSessionAccounts: async (sessionId: string) => {
+    const res = await api.get(`/dev/session/${sessionId}/accounts`);
+    return res.data;
   }
 }; 

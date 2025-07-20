@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, LogOut, Trash2, Mail, ExternalLink, X, CheckSquare, Square } from 'lucide-react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Trash2, Mail, ExternalLink, X, CheckSquare, Square } from 'lucide-react'
 import { emailsAPI } from '../services/api'
 import { Email, UnsubscribeResult, SessionInfo } from '../types'
 
@@ -10,7 +10,7 @@ interface CategoryViewProps {
   sessionInfo: SessionInfo | null;
 }
 
-const CategoryView = ({ userEmail, sessionId, sessionInfo }: CategoryViewProps) => {
+const CategoryView = ({ sessionId, sessionInfo }: CategoryViewProps) => {
   const { categoryId } = useParams<{ categoryId: string }>();
   const navigate = useNavigate();
   const [emails, setEmails] = useState<Email[]>([]);
@@ -26,14 +26,14 @@ const CategoryView = ({ userEmail, sessionId, sessionInfo }: CategoryViewProps) 
     if (categoryId) {
       loadEmails();
     }
-  }, [categoryId, userEmail]);
+  }, [categoryId, sessionId]);
 
   const loadEmails = async () => {
     if (!categoryId) return;
     
     try {
       setIsLoading(true);
-      const data = await emailsAPI.getEmails(userEmail, parseInt(categoryId));
+      const data = await emailsAPI.getEmails(sessionId, parseInt(categoryId));
       setEmails(data);
       setToastMessage(`Loaded ${data.length} email(s) in this category.`);
       if (toastTimeout) clearTimeout(toastTimeout);

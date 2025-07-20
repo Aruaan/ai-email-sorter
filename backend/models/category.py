@@ -5,4 +5,4 @@ class Category(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
-    user_email: str 
+    session_id: str 

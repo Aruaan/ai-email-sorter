@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { categoriesAPI, authAPI, emailsAPI } from '../services/api';
 import { Category, SessionInfo } from '../types';
-import { ChevronDown, Plus, Mail, Settings, LogOut, UserPlus, RefreshCw } from 'lucide-react';
+import { ChevronDown, Plus, Mail, LogOut, UserPlus, RefreshCw } from 'lucide-react';
 import { useAccount } from '../contexts/AccountContext';
 
 interface DashboardProps {
@@ -30,22 +30,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   const navigate = useNavigate();
   const [emailCounts, setEmailCounts] = useState<Record<number, number>>({});
   const [newEmailCategories, setNewEmailCategories] = useState<number[]>([]); // Track categories with new emails
-  // Modern animated dark mode toggle
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('theme') === 'dark' || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    }
-    return false;
-  });
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }, [isDark]);
   // Add account filter state
   const [accountFilter, setAccountFilter] = useState('All Accounts');
   // Add a local isRefreshing state
@@ -68,12 +52,12 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const loadCategories = async () => {
     try {
-      const data = await categoriesAPI.getCategories(userEmail);
+      const data = await categoriesAPI.getCategories(sessionId);
       setCategories(data);
       // Fetch email counts for each category
       const counts: Record<number, number> = {};
       for (const cat of data) {
-        const emails = await emailsAPI.getEmails(userEmail, cat.id);
+        const emails = await emailsAPI.getEmails(sessionId, cat.id);
         counts[cat.id] = emails.length;
       }
       setEmailCounts(counts);
@@ -92,7 +76,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       const newCategory = await categoriesAPI.createCategory(
         newCategoryName,
         newCategoryDescription,
-        userEmail
+        sessionId
       );
       setCategories([...categories, newCategory]);
       setNewCategoryName('');
@@ -107,19 +91,6 @@ const Dashboard: React.FC<DashboardProps> = ({
     authAPI.addAccount(sessionId);
   };
 
-  const handleSetPrimaryAccount = async (email: string) => {
-    try {
-      await authAPI.setPrimaryAccount(sessionId, email);
-      // Update global active account
-      setActiveAccount(email);
-      // Refresh session info
-      const updatedSessionInfo = await authAPI.getSessionInfo(sessionId);
-      onSessionUpdate(updatedSessionInfo);
-      setShowAccountDropdown(false);
-    } catch (error) {
-      console.error('Failed to set primary account:', error);
-    }
-  };
 
   const refreshSessionInfo = async () => {
     try {
@@ -145,9 +116,10 @@ const Dashboard: React.FC<DashboardProps> = ({
   }
 
   // Sort categories by email count (desc) and filter by account
-  const sortedCategories = [...categories]
-    .filter(cat => accountFilter === 'All Accounts' || cat.user_email === accountFilter)
-    .sort((a, b) => (emailCounts[b.id] ?? 0) - (emailCounts[a.id] ?? 0));
+  const sortedCategories = [...categories].sort(
+    (a, b) => (emailCounts[b.id] ?? 0) - (emailCounts[a.id] ?? 0)
+  );
+  
 
   return (
     <div className="min-h-screen bg-gray-50">

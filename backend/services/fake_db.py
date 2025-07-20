@@ -180,15 +180,8 @@ def set_history_id_by_email(email: str, history_id: str) -> bool:
 def add_category(category: Category):
     categories.append(category)
 
-def get_categories_by_user(email: str) -> List[Category]:
-    return [cat for cat in categories if cat.user_email == email]
-
 def get_categories_by_session(session_id: str) -> List[Category]:
-    session = user_sessions.get(session_id)
-    if not session:
-        return []
-    account_emails = {acc.email for acc in session.accounts}
-    return [cat for cat in categories if cat.user_email in account_emails]
+    return [cat for cat in categories if cat.session_id == session_id]
 
 def save_email(email: Email):
     global _email_id_counter

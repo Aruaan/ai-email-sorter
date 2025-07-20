@@ -4,7 +4,7 @@ from fastapi import FastAPI, Query, Request, Header, Body
 from dotenv import load_dotenv
 import os
 from fastapi.middleware.cors import CORSMiddleware
-from services.fake_db import get_user_token, get_categories_by_user, get_categories_by_session, get_primary_account, get_session_accounts, create_user_session, add_account_to_session, get_user_token_by_email, get_history_id_by_email, set_history_id_by_email
+from services.fake_db import get_user_token, get_categories_by_session, get_primary_account, get_session_accounts, create_user_session, add_account_to_session, get_user_token_by_email, get_history_id_by_email, set_history_id_by_email
 from services.gmail_processor import process_user_emails, get_latest_history_id
 import base64
 import json

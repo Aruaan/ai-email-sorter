@@ -10,4 +10,4 @@ class Email(BaseModel):
     raw: str
     user_email: str
     gmail_id: str  # Gmail message ID
-    headers: Optional[Dict[str, str]] = None 
+    headers: Optional[Dict[str, str]] = None

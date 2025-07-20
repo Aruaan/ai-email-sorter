@@ -5,7 +5,7 @@ interface LoginProps {
   onLogin: (email: string, sessionId: string) => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ }) => {
   const handleGoogleLogin = () => {
     authAPI.googleLogin();
   };

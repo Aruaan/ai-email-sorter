@@ -2,7 +2,7 @@ export interface Category {
   id: number
   name: string
   description?: string
-  user_email: string
+  session_id: string
 }
 
 export interface Email {
