@@ -306,7 +306,7 @@ const CategoryView = ({ sessionId, sessionInfo }: CategoryViewProps) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {unsubscribeResults.map((result, i) => {
+                      {unsubscribeResults.map((result) => {
                         // result.unsubscribe_links is an array of links for this email
                         // aiUnsubscribeResults is a flat array of link results (in order)
                         // We'll need to map each link to its result
@@ -315,7 +315,7 @@ const CategoryView = ({ sessionId, sessionInfo }: CategoryViewProps) => {
                         if (Array.isArray(result.unsubscribe_links) && result.unsubscribe_links.length > 0) {
                           // Find all aiUnsubscribeResults for this email's links
                           let aiIdx = 0;
-                          linkResults = result.unsubscribe_links.map((link, idx) => {
+                          linkResults = result.unsubscribe_links.map((link) => {
                             // Find the corresponding aiUnsubscribeResult for this link
                             // (Assume order is preserved)
                             let aiResult = null;
