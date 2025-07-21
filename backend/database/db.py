@@ -34,20 +34,3 @@ else:
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
-
-# test_db_connection.py
-from db import SessionLocal
-
-def test_db():
-    try:
-        db = SessionLocal()
-        db.execute("SELECT 1")
-        print("✅ Successfully connected to the database.")
-    except Exception as e:
-        print("❌ Failed to connect:", e)
-    finally:
-        db.close()
-
-if __name__ == "__main__":
-    test_db()
-
