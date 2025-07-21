@@ -46,7 +46,6 @@ def google_callback(request: Request, code: str = "", state: str = ""):
     from services.session_db import setup_gmail_watch_for_user
     history_id = setup_gmail_watch_for_user(email, access_token, refresh_token)
     
-    # Always create a new session for this login
     from services.session_db import get_or_create_session_by_email
     session_id = get_or_create_session_by_email(email, access_token, refresh_token, history_id)
     print(f"[AUTH] Using session {session_id} for user {email}")

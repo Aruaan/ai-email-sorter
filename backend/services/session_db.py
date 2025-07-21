@@ -255,11 +255,12 @@ def find_session_id_by_email(email):
     return acc.session_id if acc else None
 
 def get_or_create_session_by_email(email, access_token, refresh_token=None, history_id=None, force_new=False):
-    """Get existing session for email or create new one. Returns session_id. If force_new, always create a new session."""
+    """Get existing session for any account with this email, or create new one. Returns session_id. If force_new, always create a new session."""
     db = SessionLocal()
     from database.models import Session as DBSession, SessionAccount as DBSessionAccount
     import uuid
     if not force_new:
+        # Find any session where this email is present (not just primary)
         acc = db.query(DBSessionAccount).filter_by(email=email).first()
         if acc:
             session_id = acc.session_id
