@@ -77,7 +77,7 @@ const CategoryView = ({ sessionId, sessionInfo }: CategoryViewProps) => {
       });
       
       setEmails(data);
-      setToastMessage(`Loaded ${data.length} email(s) in this category.`);
+      // setToastMessage(`Loaded ${data.length} email(s) in this category.`); // Removed toast
       if (toastTimeout) clearTimeout(toastTimeout);
       const timeout = window.setTimeout(() => setToastMessage(null), 3000);
       setToastTimeout(timeout);
@@ -239,63 +239,50 @@ const CategoryView = ({ sessionId, sessionInfo }: CategoryViewProps) => {
           </div>
         )}
 
-        {/* Unified Category Card: Breadcrumb, Name/Description, Emails List */}
-        <div className="bg-white shadow rounded-xl p-4 mb-4">
-          {/* Breadcrumb */}
-          <div className="flex items-center space-x-2 text-xs text-gray-500 mb-1">
-            <span 
-              className="cursor-pointer hover:text-gray-700 transition-colors"
+        {/* Unified Category Card: Header, Emails List */}
+        <div className="bg-white shadow rounded-xl p-6 mb-4 min-h-[500px] flex flex-col">
+          {/* Single, clean header */}
+          <div className="mb-2 flex items-center gap-2">
+            <button
               onClick={() => navigate('/')}
+              className="text-gray-500 hover:text-blue-600 text-sm font-medium focus:outline-none"
+              style={{ minWidth: 0 }}
             >
-              Dashboard
-            </span>
-            <span className="text-gray-400">/</span>
-            <span className="text-gray-700 font-semibold">{categoryName}</span>
-          </div>
-          {/* Name and Description */}
-          <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mb-4">
-            <span className="text-base font-semibold text-gray-900 truncate">{categoryName}</span>
+              &larr; Back
+            </button>
+            <span className="text-lg font-semibold text-gray-900 truncate">{categoryName}</span>
             {categoryDescription && (
               <span className="text-xs text-gray-500 truncate">&mdash; {categoryDescription}</span>
             )}
           </div>
-
           {/* Bulk Actions */}
           {selectedEmails.size > 0 && (
-            <div className="bg-white shadow rounded-lg p-4 mb-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-700">
-                  {selectedEmails.size} email(s) selected
-                </span>
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleUnsubscribe}
-                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    <span>Unsubscribe</span>
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>Delete</span>
-                  </button>
-                </div>
+            <div className="bg-gray-50 rounded-md p-3 mb-3 flex items-center justify-between border border-gray-200">
+              <span className="text-sm text-gray-700">{selectedEmails.size} email(s) selected</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleUnsubscribe}
+                  className="flex items-center gap-1 px-3 py-1 text-sm font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100"
+                >
+                  <ExternalLink className="w-4 h-4" /> Unsubscribe
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="flex items-center gap-1 px-3 py-1 text-sm font-medium text-red-600 bg-red-50 rounded hover:bg-red-100"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete
+                </button>
               </div>
             </div>
           )}
-
-          {/* Unsubscribe Feedback Section */}
+          {/* Unsubscribe Feedback Section (collapsible, does not push content) */}
           {(unsubscribeResults.length > 0 || aiUnsubscribeResults.length > 0) && (
-            <div className="mb-4 border border-gray-200 rounded-lg bg-white px-4 pt-3 pb-2">
+            <div className="mb-3 border border-gray-200 rounded bg-white px-4 pt-3 pb-2 transition-all duration-200">
               <div className="flex items-center gap-2">
                 <CheckCircle className="w-5 h-5 text-green-500" />
                 <span className="font-medium text-gray-900 text-sm">
                   Unsubscribe attempted for {unsubscribeCheckedCount} selected email{unsubscribeCheckedCount === 1 ? '' : 's'}
                 </span>
-                {/* Error icon and message if any AI unsubscribe failed */}
                 {aiUnsubscribeResults.some(res => res.success === false) && (
                   <span className="flex items-center ml-2 text-xs text-red-600" title="Some unsubscribes failed">
                     <AlertCircle className="w-4 h-4 mr-1" />
@@ -308,20 +295,16 @@ const CategoryView = ({ sessionId, sessionInfo }: CategoryViewProps) => {
                 onClick={() => setUnsubscribeDropdownOpen((open) => !open)}
                 aria-expanded={unsubscribeDropdownOpen}
               >
-                {unsubscribeDropdownOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                {unsubscribeDropdownOpen ? 'Hide Details' : 'Show Details'}
+                {unsubscribeDropdownOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />} {unsubscribeDropdownOpen ? 'Hide Details' : 'Show Details'}
               </button>
               {unsubscribeDropdownOpen && (
                 <div className="mt-2">
-                  {/* Green status lines */}
                   {unsubscribeResults.length > 0 && (
-                    <div className="mb-3 border border-gray-100 rounded bg-white px-3 py-2">
+                    <div className="mb-2 border border-gray-100 rounded bg-white px-3 py-2">
                       {unsubscribeResults.map((result, index) => (
                         <div key={index} className="text-xs text-green-700 mb-1 leading-tight">
                           {result.unsubscribe_links.length > 0 ? (
-                            <span>
-                              Email {result.email_id}: {result.unsubscribe_links.length} unsubscribe link(s) found
-                            </span>
+                            <span>Email {result.email_id}: {result.unsubscribe_links.length} unsubscribe link(s) found</span>
                           ) : (
                             <span>Email {result.email_id}: No unsubscribe links found</span>
                           )}
@@ -329,9 +312,8 @@ const CategoryView = ({ sessionId, sessionInfo }: CategoryViewProps) => {
                       ))}
                     </div>
                   )}
-                  {/* AI Unsubscribe Actions Table */}
                   {aiUnsubscribeResults.length > 0 && (
-                    <div className="w-full mt-4">
+                    <div className="w-full mt-2">
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                         <h3 className="text-xs font-medium text-blue-800 mb-2">AI Unsubscribe Actions</h3>
                         <div className="overflow-x-auto">
@@ -392,42 +374,37 @@ const CategoryView = ({ sessionId, sessionInfo }: CategoryViewProps) => {
               )}
             </div>
           )}
-
           {/* Emails List */}
-          <div className="mt-2">
-            <div className="px-0 py-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-medium text-gray-900">Emails</h2>
-                <div className="flex items-center gap-2">
-                  {/* Refresh Button (now with RefreshCw icon) */}
+          <div className="flex-1 flex flex-col mt-2">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-base font-medium text-gray-900">Emails</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={loadEmails}
+                  className="p-2 rounded-full hover:bg-blue-100 text-blue-600"
+                  title="Refresh emails"
+                  disabled={isLoading}
+                >
+                  <RefreshCw className={`w-5 h-5${isLoading ? ' animate-spin' : ''}`} />
+                </button>
+                {emails.length > 0 && (
                   <button
-                    onClick={loadEmails}
-                    className="p-2 rounded-full hover:bg-blue-100 text-blue-600"
-                    title="Refresh emails"
-                    disabled={isLoading}
+                    onClick={handleSelectAll}
+                    className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800"
                   >
-                    <RefreshCw className={`w-5 h-5${isLoading ? ' animate-spin' : ''}`} />
+                    {selectedEmails.size === emails.length ? (
+                      <CheckSquare className="w-4 h-4" />
+                    ) : (
+                      <Square className="w-4 h-4" />
+                    )}
+                    <span>
+                      {selectedEmails.size === emails.length ? 'Deselect All' : 'Select All'}
+                    </span>
                   </button>
-                  {emails.length > 0 && (
-                    <button
-                      onClick={handleSelectAll}
-                      className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      {selectedEmails.size === emails.length ? (
-                        <CheckSquare className="w-4 h-4" />
-                      ) : (
-                        <Square className="w-4 h-4" />
-                      )}
-                      <span>
-                        {selectedEmails.size === emails.length ? 'Deselect All' : 'Select All'}
-                      </span>
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
             </div>
-
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-gray-200 flex-1 overflow-y-auto">
               {emails.length === 0 ? (
                 <div className="px-6 py-8 text-center">
                   <Mail className="mx-auto h-12 w-12 text-gray-400" />
