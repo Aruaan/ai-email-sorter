@@ -1,8 +1,10 @@
 import axios from 'axios';
 import { Category, Email, UnsubscribeResult, SessionInfo } from '../types';
 
+
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
   timeout: 60000, // Increased from 10000 to 60000 (60 seconds)
 });
 
