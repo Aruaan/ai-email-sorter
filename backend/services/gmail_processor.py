@@ -1,14 +1,14 @@
 from typing import List, Dict, Any
-from backend.models.user import UserToken
-from backend.models.category import Category
+from models.user import UserToken
+from models.category import Category
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 import openai
 import os
 import base64
 from dotenv import load_dotenv
-from backend.services.session_db import save_email, email_exists
-from backend.models.email import Email
+from services.session_db import save_email, email_exists
+from models.email import Email
 
 load_dotenv()
 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -126,7 +126,7 @@ def process_user_emails(user_token: UserToken, categories: List[Category], max_e
             return []
 
         if not last_history_id:
-            from backend.services.session_db import set_history_id_by_email
+            from services.session_db import set_history_id_by_email
             current_history_id = get_latest_history_id(service)
             set_history_id_by_email(user_token.email, current_history_id)
             print(f"Set initial history ID for {user_token.email} to {current_history_id}")

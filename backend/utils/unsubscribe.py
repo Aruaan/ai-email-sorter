@@ -1,6 +1,6 @@
 import re
 from typing import List
-from backend.models.email import Email
+from models.email import Email
 from bs4 import BeautifulSoup, Tag
 from urllib.parse import unquote
 from email.parser import HeaderParser

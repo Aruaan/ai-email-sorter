@@ -3,13 +3,13 @@ import uvicorn
 import logging
 from fastapi import FastAPI, Query, Request, Header, Body
 from fastapi.middleware.cors import CORSMiddleware
-from backend.services.session_db import get_session_accounts, get_primary_account, get_account, get_history_id_by_email, set_history_id_by_email, find_session_id_by_email
-from backend.services.gmail_processor import process_user_emails
-from backend.database.db import engine, Base
+from services.session_db import get_session_accounts, get_primary_account, get_account, get_history_id_by_email, set_history_id_by_email, find_session_id_by_email
+from services.gmail_processor import process_user_emails
+from database.db import engine, Base
 from fastapi.routing import APIRoute
-from backend.routes.auth import router as auth_router
-from backend.routes.categories import router as categories_router
-from backend.routes.emails import router as emails_router
+from routes.auth import router as auth_router
+from routes.categories import router as categories_router
+from routes.emails import router as emails_router
 import os
 
 # Load environment variables from .env
@@ -49,12 +49,12 @@ def dev_process_emails(session_id: str = Query(...), email: str = Query(None), m
             print(f"User token not found for session {session_id}")
             return {"error": "User token not found"}
         print(f"Found user token for: {acc.email}")
-        from backend.services.session_db import get_categories_by_session
+        from services.session_db import get_categories_by_session
         categories = get_categories_by_session(session_id)
         if not categories:
             # Get or create "Uncategorized" category for this user
             print(f"No categories found for session: {session_id}, getting or creating 'Uncategorized' category")
-            from backend.services.session_db import get_or_create_uncategorized_category
+            from services.session_db import get_or_create_uncategorized_category
 
             # Get the primary account email for this session
             primary_email = get_primary_account(session_id)
@@ -68,7 +68,7 @@ def dev_process_emails(session_id: str = Query(...), email: str = Query(None), m
         print(f"Found {len(categories)} categories for session: {session_id}")
         # Always use real Gmail API since user has proper OAuth tokens
         # Build a UserToken-like object for process_user_emails
-        from backend.models.user import UserToken
+        from models.user import UserToken
         user_token = UserToken(
             email=acc.email,
             access_token=acc.access_token,
@@ -107,18 +107,18 @@ def process_all_accounts(session_id: str = Query(...), max_emails: int = Query(3
     for acc in accounts:
         try:
             # Get categories for this session
-            from backend.services.session_db import get_categories_by_session
+            from services.session_db import get_categories_by_session
             categories = get_categories_by_session(session_id)
             if not categories:
                 # Get or create "Uncategorized" category
-                from backend.services.session_db import get_or_create_uncategorized_category
+                from services.session_db import get_or_create_uncategorized_category
                 primary_email = get_primary_account(session_id)
                 if primary_email:
                     uncategorized_category = get_or_create_uncategorized_category(primary_email, session_id)
                     categories = [uncategorized_category]
 
             # Build UserToken
-            from backend.models.user import UserToken
+            from models.user import UserToken
             user_token = UserToken(
                 email=acc.email,
                 access_token=acc.access_token,
@@ -143,7 +143,7 @@ def create_test_session(email: str = Query(...), access_token: str = Query("test
     """Create a test session for manual testing"""
     import uuid
     session_id = str(uuid.uuid4())
-    from backend.services.session_db import create_session
+    from services.session_db import create_session
     create_session(session_id, email, [{
         "email": email,
         "access_token": access_token,
@@ -159,7 +159,7 @@ def create_test_session(email: str = Query(...), access_token: str = Query("test
 @app.post("/dev/test/add-account")
 def add_test_account(session_id: str = Query(...), email: str = Query(...), access_token: str = Query("test-token"), refresh_token: str = Query("test-refresh")):
     """Add a test account to an existing session"""
-    from backend.services.session_db import add_account_to_session
+    from services.session_db import add_account_to_session
     add_account_to_session(session_id, email, access_token, refresh_token)
     return {
         "session_id": session_id,
@@ -203,14 +203,14 @@ async def gmail_webhook(request: Request, authorization: str = Header(None)):
         return {"status": "account not found"}
 
     # Get categories for this session
-    from backend.services.session_db import get_categories_by_session
+    from services.session_db import get_categories_by_session
     categories = get_categories_by_session(session_id)
     print(f"[WEBHOOK] Found {len(categories)} categories for session {session_id}: {[c.name for c in categories]}")
 
     if not categories:
         # Get or create "Uncategorized" category for this user
         logging.info(f"No categories found for session {session_id}, getting or creating 'Uncategorized' category")
-        from backend.services.session_db import get_or_create_uncategorized_category
+        from services.session_db import get_or_create_uncategorized_category
 
         # Get the primary account email for this session
         primary_email = get_primary_account(session_id)
@@ -240,7 +240,7 @@ async def gmail_webhook(request: Request, authorization: str = Header(None)):
 
     # Call process_user_emails with last_history_id
     try:
-        from backend.models.user import UserToken
+        from models.user import UserToken
         user_token = UserToken(
             email=acc.email,
             access_token=acc.access_token,
@@ -251,7 +251,7 @@ async def gmail_webhook(request: Request, authorization: str = Header(None)):
         print(f"[GMAIL WEBHOOK] Processed {len(processed)} emails for {email_address}")
         logging.info(f"[GMAIL WEBHOOK] Processed {len(processed)} emails for {email_address}")
         # Update stored historyId to the latest from Gmail
-        from backend.services.gmail_processor import get_latest_history_id
+        from services.gmail_processor import get_latest_history_id
         creds = acc.access_token
         refresh = acc.refresh_token
         from google.oauth2.credentials import Credentials
@@ -271,16 +271,16 @@ async def gmail_webhook(request: Request, authorization: str = Header(None)):
 @app.post("/dev/migrate-orphaned-emails")
 def migrate_orphaned_emails_endpoint(session_id: str = Query(...)):
     """Manually migrate orphaned emails to the session's Uncategorized category"""
-    from backend.services.session_db import migrate_orphaned_emails_to_uncategorized
+    from services.session_db import migrate_orphaned_emails_to_uncategorized
     migrate_orphaned_emails_to_uncategorized(session_id)
     return {"message": "Migration completed"}
 
 @app.get("/dev/debug/sessions")
 def debug_sessions_endpoint():
     """Debug endpoint to see all sessions and their categories"""
-    from backend.services.session_db import get_session
-    from backend.database.models import Session as DBSession, Category as DBCategory
-    from backend.database.db import SessionLocal
+    from services.session_db import get_session
+    from database.models import Session as DBSession, Category as DBCategory
+    from database.db import SessionLocal
 
     db = SessionLocal()
     try:

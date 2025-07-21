@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Body, Query, status, Response
 from typing import List
-from backend.models.category import Category
-from backend.services.session_db import add_category, get_categories_by_session
+from models.category import Category
+from services.session_db import add_category, get_categories_by_session
 import uuid
 
 router = APIRouter()
@@ -40,9 +40,9 @@ def list_categories(session_id: str = Query(...)):
 @router.put("/{category_id}")
 def update_category(category_id: str, name: str = Body(None), description: str = Body(None)):
     """Update a category's name and/or description"""
-    from backend.database.db import SessionLocal
-    from backend.database.models import Category as DBCategory
-    from backend.database.models import Email as DBEmail
+    from database.db import SessionLocal
+    from database.models import Category as DBCategory
+    from database.models import Email as DBEmail
     
     db = SessionLocal()
     try:

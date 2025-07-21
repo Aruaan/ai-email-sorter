@@ -1,6 +1,6 @@
 from sqlalchemy import Column, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
-from backend.database.db import Base
+from database.db import Base
 import uuid
 from sqlalchemy.orm import relationship
 
@@ -30,7 +30,7 @@ class Session(Base):
     __table_args__ = {'extend_existing': True}
     id = Column(String, primary_key=True, index=True)  # session_id (UUID)
     primary_account = Column(String, nullable=False)
-    accounts = relationship("backend.database.models.SessionAccount", back_populates="session", cascade="all, delete-orphan")
+    accounts = relationship("database.models.SessionAccount", back_populates="session", cascade="all, delete-orphan")
 
 class SessionAccount(Base):
     __tablename__ = "session_accounts"
@@ -41,4 +41,4 @@ class SessionAccount(Base):
     access_token = Column(String, nullable=False)
     refresh_token = Column(String, nullable=True)
     history_id = Column(String, nullable=True)
-    session = relationship("backend.database.models.Session", back_populates="accounts")
+    session = relationship("database.models.Session", back_populates="accounts")
