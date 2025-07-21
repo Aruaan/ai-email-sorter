@@ -11,13 +11,13 @@ const api = axios.create({
 // Auth API
 export const authAPI = {
   googleLogin: () => {
-    window.location.href = '/api/auth/google';
+    window.location.href = `${BASE_URL}/auth/google`;
   },
   googleCallback: (code: string, state: string) => {
     return api.get(`/auth/callback?code=${code}&state=${state}`);
   },
   addAccount: (sessionId: string) => {
-    window.location.href = `/api/auth/google/add-account?session_id=${sessionId}`;
+    window.location.href = `${BASE_URL}/auth/google/add-account?session_id=${sessionId}`;
   },
   getSessionInfo: async (sessionId: string): Promise<SessionInfo> => {
     const res = await api.get(`/auth/session/${sessionId}`);
