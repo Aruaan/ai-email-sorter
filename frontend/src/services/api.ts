@@ -1,10 +1,10 @@
 import axios from 'axios';
 import { Category, Email, UnsubscribeResult, SessionInfo } from '../types';
 
-
+const BASE_URL = "https://ai-email-sorter-5mom.onrender.com"
 
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+  baseURL: BASE_URL || 'http://localhost:8000',
   timeout: 60000, // Increased from 10000 to 60000 (60 seconds)
 });
 
