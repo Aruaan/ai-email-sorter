@@ -166,6 +166,26 @@ async def unsubscribe_link_worker_async(unsubscribe_url, user_email=None):
             page = await browser.new_page()
             await page.goto(unsubscribe_url, timeout=60000)
 
+            # --- BLANK PAGE CHECK ---
+            html = await page.content()
+            # Try to get visible text from <body>
+            try:
+                text = await page.inner_text('body', timeout=2000) if await page.locator('body').count() > 0 else ''
+            except Exception:
+                text = ''
+            if not text.strip():
+                await browser.close()
+                log.append("Blank page detected after visiting unsubscribe link.")
+                return {
+                    "success": True,
+                    "reason": "Blank page after visiting unsubscribe link—likely successful.",
+                    "actions": None,
+                    "action_success": True,
+                    "action_msg": "No visible content; assumed unsubscribed.",
+                    "log": log
+                }
+            # --- END BLANK PAGE CHECK ---
+
             max_steps = 5
             step_count = 0
             previous_actions = set()
