@@ -296,7 +296,37 @@ const CategoryView = ({ sessionId, sessionInfo }: CategoryViewProps) => {
               </div>
               {unsubscribeDropdownOpen && (
                 <div className="mt-2">
-                  {/* ...details table unchanged... */}
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-gray-700 border-b">
+                        <th className="py-1 pr-4">Email</th>
+                        <th className="py-1 pr-4">Status</th>
+                        <th className="py-1">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {unsubscribeResults.map((result, i) => {
+                        const aiResult = aiUnsubscribeResults[i] || {};
+                        return (
+                          <tr key={result.email_id || i} className="border-b last:border-0">
+                            <td className="py-1 pr-4 text-gray-900 font-medium">
+                              {result.email_id}
+                            </td>
+                            <td className="py-1 pr-4">
+                              {aiResult.success === false ? (
+                                <span className="text-red-600 font-semibold">Failed</span>
+                              ) : (
+                                <span className="text-green-600 font-semibold">Success</span>
+                              )}
+                            </td>
+                            <td className="py-1 text-gray-700">
+                              {aiResult.reason || aiResult.action_msg || aiResult.error || 'No details'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
