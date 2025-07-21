@@ -300,28 +300,75 @@ const CategoryView = ({ sessionId, sessionInfo }: CategoryViewProps) => {
                     <thead>
                       <tr className="text-left text-gray-700 border-b">
                         <th className="py-1 pr-4">Email</th>
+                        <th className="py-1 pr-4">Link</th>
                         <th className="py-1 pr-4">Status</th>
                         <th className="py-1">Details</th>
                       </tr>
                     </thead>
                     <tbody>
                       {unsubscribeResults.map((result, i) => {
-                        const aiResult = aiUnsubscribeResults[i] || {};
-                        return (
-                          <tr key={result.email_id || i} className="border-b last:border-0">
+                        // result.unsubscribe_links is an array of links for this email
+                        // aiUnsubscribeResults is a flat array of link results (in order)
+                        // We'll need to map each link to its result
+                        const email = emails.find(e => e.id === result.email_id);
+                        let linkResults = [];
+                        if (Array.isArray(result.unsubscribe_links) && result.unsubscribe_links.length > 0) {
+                          // Find all aiUnsubscribeResults for this email's links
+                          let aiIdx = 0;
+                          linkResults = result.unsubscribe_links.map((link, idx) => {
+                            // Find the corresponding aiUnsubscribeResult for this link
+                            // (Assume order is preserved)
+                            let aiResult = null;
+                            // Find the next aiUnsubscribeResult with matching link
+                            for (; aiIdx < aiUnsubscribeResults.length; aiIdx++) {
+                              if (aiUnsubscribeResults[aiIdx]?.link === link) {
+                                aiResult = aiUnsubscribeResults[aiIdx];
+                                aiIdx++;
+                                break;
+                              }
+                            }
+                            return { link, ...aiResult };
+                          });
+                        }
+                        return linkResults.length > 0 ? (
+                          linkResults.map((lr, idx) => (
+                            <tr key={result.email_id + lr.link + idx} className="border-b last:border-0">
+                              <td className="py-1 pr-4 text-gray-900 font-medium">
+                                {email ? (
+                                  <>
+                                    <div className="font-semibold">{email.subject}</div>
+                                    <div className="text-xs text-gray-500">{email.from_email}</div>
+                                  </>
+                                ) : result.email_id}
+                              </td>
+                              <td className="py-1 pr-4 break-all max-w-xs">{lr.link}</td>
+                              <td className="py-1 pr-4">
+                                {lr.skipped ? (
+                                  <span className="text-gray-500 font-semibold">Skipped</span>
+                                ) : lr.success === false ? (
+                                  <span className="text-red-600 font-semibold">Failed</span>
+                                ) : (
+                                  <span className="text-green-600 font-semibold">Success</span>
+                                )}
+                              </td>
+                              <td className="py-1 text-gray-700">
+                                {lr.reason || lr.action_msg || lr.error || 'No details'}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr key={result.email_id} className="border-b last:border-0">
                             <td className="py-1 pr-4 text-gray-900 font-medium">
-                              {result.email_id}
+                              {email ? (
+                                <>
+                                  <div className="font-semibold">{email.subject}</div>
+                                  <div className="text-xs text-gray-500">{email.from_email}</div>
+                                </>
+                              ) : result.email_id}
                             </td>
-                            <td className="py-1 pr-4">
-                              {aiResult.success === false ? (
-                                <span className="text-red-600 font-semibold">Failed</span>
-                              ) : (
-                                <span className="text-green-600 font-semibold">Success</span>
-                              )}
-                            </td>
-                            <td className="py-1 text-gray-700">
-                              {aiResult.reason || aiResult.action_msg || aiResult.error || 'No details'}
-                            </td>
+                            <td className="py-1 pr-4">-</td>
+                            <td className="py-1 pr-4">-</td>
+                            <td className="py-1 text-gray-700">No unsubscribe links found</td>
                           </tr>
                         );
                       })}

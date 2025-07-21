@@ -353,19 +353,29 @@ async def batch_unsubscribe_worker_async(unsubscribe_links, user_email=None):
     seen_links = set()
     for i, link in enumerate(unsubscribe_links):
         if i >= batch_limit:
-            results.append({"success": False, "reason": "Batch limit exceeded (10 per call)", "link": link})
+            results.append({
+                "link": link,
+                "success": False,
+                "reason": "Batch limit exceeded (10 per call)",
+                "skipped": True
+            })
             continue
         if not link or not (link.startswith("http://") or link.startswith("https://")):
             # Skip non-http(s) links (e.g., mailto:)
             results.append({
+                "link": link,
                 "success": False,
                 "reason": "Skipped non-web unsubscribe link (e.g., mailto: or invalid)",
-                "link": link,
                 "skipped": True
             })
             continue
         if link in seen_links:
-            results.append({"success": True, "reason": "Duplicate link, already unsubscribed in this batch", "link": link, "duplicate": True})
+            results.append({
+                "link": link,
+                "success": True,
+                "reason": "Duplicate link, already unsubscribed in this batch",
+                "duplicate": True
+            })
             continue
         seen_links.add(link)
         result = await unsubscribe_link_worker_async(link, user_email)
