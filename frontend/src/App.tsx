@@ -99,6 +99,9 @@ function App() {
     localStorage.setItem('userEmail', email);
     localStorage.setItem('sessionId', sessionId);
     
+    // Set the logged-in account as the active account
+    localStorage.setItem('activeAccount', email);
+    
     // Load session info
     authAPI.getSessionInfo(sessionId)
       .then(setSessionInfo)
@@ -106,11 +109,19 @@ function App() {
   };
 
   const handleLogout = () => {
+    // Call backend logout endpoint if we have a session
+    if (sessionId) {
+      fetch(`/api/auth/logout?session_id=${sessionId}`, { method: 'POST' })
+        .catch(console.error); // Don't block logout if this fails
+    }
+    
     setUserEmail(null);
     setSessionId(null);
     setSessionInfo(null);
+    // Clear all session-related data from localStorage
     localStorage.removeItem('userEmail');
     localStorage.removeItem('sessionId');
+    localStorage.removeItem('activeAccount');
   };
 
   if (isLoading) {

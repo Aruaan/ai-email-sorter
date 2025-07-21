@@ -106,3 +106,11 @@ def test_extract_unsubscribe_links():
     assert "https://unsubscribe.example.com/unsub2" in links
     # Should not include unrelated links
     assert all("keep" not in l for l in links) 
+
+def test_dev_process_emails_invalid_session():
+    from fastapi.testclient import TestClient
+    from main import app
+    client = TestClient(app)
+    resp = client.get("/dev/process-emails?session_id=invalid")
+    assert resp.status_code == 200
+    assert "error" in resp.json() 

@@ -31,3 +31,13 @@ def test_list_categories():
         categories = response.json()
         assert isinstance(categories, list)
         assert categories[0]['name'] == "Work" 
+
+def test_create_and_list_category():
+    from fastapi.testclient import TestClient
+    from main import app
+    client = TestClient(app)
+    session_id = "cat-session"
+    resp = client.post("/categories/", json={"name": "TestCat", "description": "desc", "session_id": session_id})
+    assert resp.status_code == 200
+    resp2 = client.get(f"/categories/?session_id={session_id}")
+    assert any(cat["name"] == "TestCat" for cat in resp2.json()) 

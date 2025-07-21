@@ -1,15 +1,15 @@
 export interface Category {
-  id: number
+  id: string
   name: string
   description?: string
   session_id: string
 }
 
 export interface Email {
-  id: number
+  id: string
   subject: string
   from_email: string
-  category_id: number
+  category_id: string
   summary: string
   raw: string
   user_email: string
@@ -18,7 +18,7 @@ export interface Email {
 }
 
 export interface UnsubscribeResult {
-  email_id: number
+  email_id: string
   unsubscribe_links: string[]
   error?: string
 }

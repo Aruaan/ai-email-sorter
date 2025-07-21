@@ -4,6 +4,7 @@ python-dotenv
 google-auth
 google-auth-oauthlib
 pydantic
+pydantic-core
 google-api-python-client
 pytest
 httpx
@@ -11,3 +12,4 @@ openai
 beautifulsoup4
 psycopg2-binary
 sqlalchemy
+playwright

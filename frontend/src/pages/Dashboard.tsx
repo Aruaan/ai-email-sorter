@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { categoriesAPI, authAPI, emailsAPI } from '../services/api';
+import { categoriesAPI, authAPI, emailsAPI, sessionAPI } from '../services/api';
 import { Category, SessionInfo } from '../types';
-import { ChevronDown, Plus, Mail, LogOut, UserPlus, RefreshCw } from 'lucide-react';
+import { ChevronDown, Plus, Mail, LogOut, UserPlus, RefreshCw, X, Edit3 } from 'lucide-react';
 import { useAccount } from '../contexts/AccountContext';
 
 interface DashboardProps {
@@ -28,12 +28,20 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
   const { activeAccount, setActiveAccount } = useAccount();
   const navigate = useNavigate();
-  const [emailCounts, setEmailCounts] = useState<Record<number, number>>({});
-  const [newEmailCategories, setNewEmailCategories] = useState<number[]>([]); // Track categories with new emails
-  // Add account filter state
-  const [accountFilter, setAccountFilter] = useState('All Accounts');
+  const [emailCounts, setEmailCounts] = useState<Record<string, number>>({});
+  const [newEmailCategories, setNewEmailCategories] = useState<string[]>([]); // Track categories with new emails
+  // Add account filter state - this will be the display value for the dropdown
+  const [accountFilter, setAccountFilter] = useState(activeAccount || 'All Accounts');
   // Add a local isRefreshing state
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // Add state for account removal
+  const [removingAccount, setRemovingAccount] = useState<string | null>(null);
+  // Add ref for the dropdown button
+  const dropdownButtonRef = useRef<HTMLButtonElement>(null);
+  // Add state for category editing
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState('');
+  const [editCategoryDescription, setEditCategoryDescription] = useState('');
 
   useEffect(() => {
     loadCategories();
@@ -43,21 +51,85 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
   }, [userEmail, sessionId]);
 
+  // Reload categories when active account changes
+  useEffect(() => {
+    if (!isLoading) {
+      loadCategories();
+    }
+  }, [activeAccount]);
+
+  // Handle Escape key to close account dropdown
+  useEffect(() => {
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showAccountDropdown) {
+        setShowAccountDropdown(false);
+      }
+    };
+
+    if (showAccountDropdown) {
+      document.addEventListener('keydown', handleEscapeKey);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [showAccountDropdown]);
+
+  // Handle click outside to close account dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      const dropdownContainer = target.closest('.account-dropdown-container');
+      
+      if (showAccountDropdown && !dropdownContainer && target !== dropdownButtonRef.current) {
+        setShowAccountDropdown(false);
+      }
+    };
+
+    if (showAccountDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAccountDropdown]);
+
   // Update active account when sessionInfo changes (e.g., new account added)
   useEffect(() => {
-    if (sessionInfo?.primary_account && !activeAccount) {
-      setActiveAccount(sessionInfo.primary_account);
+    if (sessionInfo?.accounts) {
+      if (sessionInfo.accounts.length === 1) {
+        // If there's only one account, automatically set it as active
+        setActiveAccount(sessionInfo.accounts[0].email);
+      } else if (sessionInfo.primary_account && !activeAccount) {
+        // If there are multiple accounts and no active account is set, use primary
+        setActiveAccount(sessionInfo.primary_account);
+      } else if (sessionInfo.accounts.length > 1 && !activeAccount) {
+        // If multiple accounts but no active account, default to "All Accounts"
+        setActiveAccount('All Accounts');
+      }
     }
   }, [sessionInfo, activeAccount, setActiveAccount]);
+
+  // Sync accountFilter with activeAccount
+  useEffect(() => {
+    setAccountFilter(activeAccount);
+  }, [activeAccount]);
+
+  // Remove the problematic sync useEffect that was causing the revert
+  // The accountFilter and activeAccount will be managed separately
 
   const loadCategories = async () => {
     try {
       const data = await categoriesAPI.getCategories(sessionId);
       setCategories(data);
-      // Fetch email counts for each category
-      const counts: Record<number, number> = {};
+      // Fetch email counts for each category based on active account
+      const counts: Record<string, number> = {};
       for (const cat of data) {
-        const emails = await emailsAPI.getEmails(sessionId, cat.id);
+        // If there's only one account or "All Accounts" is selected, don't filter by user_email
+        // Otherwise, use the selected account
+        const userEmail = (sessionInfo?.accounts.length === 1 || activeAccount === 'All Accounts') ? undefined : activeAccount;
+        const emails = await emailsAPI.getEmails(sessionId, cat.id, userEmail);
         counts[cat.id] = emails.length;
       }
       setEmailCounts(counts);
@@ -91,6 +163,45 @@ const Dashboard: React.FC<DashboardProps> = ({
     authAPI.addAccount(sessionId);
   };
 
+  const handleRemoveAccount = async (email: string) => {
+    if (!sessionInfo || sessionInfo.accounts.length <= 1) {
+      alert('Cannot remove the last account. Please add another account first.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to remove ${email} from this session?`)) {
+      return;
+    }
+
+    try {
+      setRemovingAccount(email);
+      await sessionAPI.removeAccount(sessionId, email);
+      
+      // Refresh session info to get updated account list
+      await refreshSessionInfo();
+      
+      // If the removed account was the current filter, reset to "All Accounts"
+      if (accountFilter === email) {
+        setAccountFilter('All Accounts');
+      }
+      
+      // If the removed account was the active account, clear it
+      if (activeAccount === email) {
+        setActiveAccount('');
+      }
+      
+      // Close the dropdown after successful removal
+      setShowAccountDropdown(false);
+      
+      console.log(`Successfully removed account: ${email}`);
+    } catch (error) {
+      console.error('Failed to remove account:', error);
+      alert('Failed to remove account. Please try again.');
+    } finally {
+      setRemovingAccount(null);
+    }
+  };
+
 
   const refreshSessionInfo = async () => {
     try {
@@ -107,6 +218,39 @@ const Dashboard: React.FC<DashboardProps> = ({
     setTimeout(() => setIsRefreshing(false), 500); // short delay for feedback
   };
 
+  const handleEditCategory = (category: Category) => {
+    setEditingCategory(category.id);
+    setEditCategoryName(category.name);
+    setEditCategoryDescription(category.description || '');
+  };
+
+  const handleSaveCategoryEdit = async () => {
+    if (!editingCategory) return;
+
+    try {
+      const result = await categoriesAPI.updateCategory(editingCategory, editCategoryName, editCategoryDescription);
+      
+      if (result.error) {
+        alert(result.error);
+        return;
+      }
+      
+      setEditingCategory(null);
+      setEditCategoryName('');
+      setEditCategoryDescription('');
+      await loadCategories(); // Reload to show updated data
+    } catch (error) {
+      console.error('Failed to update category:', error);
+      alert('Failed to update category. Please try again.');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCategory(null);
+    setEditCategoryName('');
+    setEditCategoryDescription('');
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -115,9 +259,9 @@ const Dashboard: React.FC<DashboardProps> = ({
     );
   }
 
-  // Sort categories by email count (desc) and filter by account
+  // Sort categories by name to maintain consistent order
   const sortedCategories = [...categories].sort(
-    (a, b) => (emailCounts[b.id] ?? 0) - (emailCounts[a.id] ?? 0)
+    (a, b) => a.name.localeCompare(b.name)
   );
   
 
@@ -131,14 +275,15 @@ const Dashboard: React.FC<DashboardProps> = ({
               <h1 className="text-2xl font-bold text-gray-900">AI Email Sorter</h1>
               
               {/* Account Switcher */}
-              <div className="relative">
+              <div className="relative account-dropdown-container">
                 <button
+                  ref={dropdownButtonRef}
                   onClick={() => setShowAccountDropdown(!showAccountDropdown)}
                   className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span>{sessionInfo?.accounts.length || 0} Accounts</span>
-                  <ChevronDown className="w-4 h-4" />
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showAccountDropdown ? 'rotate-180' : ''}`} />
                 </button>
                 
                 {showAccountDropdown && (
@@ -149,7 +294,21 @@ const Dashboard: React.FC<DashboardProps> = ({
                       </div>
                       {sessionInfo?.accounts.map((account) => (
                         <div key={account.email} className="flex items-center justify-between px-4 py-2 hover:bg-gray-50">
-                          <span className="text-sm text-gray-700">{account.email}</span>
+                          <span className="text-sm text-gray-700 truncate flex-1">{account.email}</span>
+                          {sessionInfo.accounts.length > 1 && (
+                            <button
+                              onClick={() => handleRemoveAccount(account.email)}
+                              disabled={removingAccount === account.email}
+                              className="ml-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded disabled:opacity-50"
+                              title={`Remove ${account.email}`}
+                            >
+                              {removingAccount === account.email ? (
+                                <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                <X className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
                         </div>
                       ))}
                       <div className="border-t border-gray-200 mt-2 pt-2">
@@ -173,7 +332,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
               >
                 <LogOut className="w-4 h-4" />
-                <span>Logout</span>
+                <span>{(sessionInfo?.accounts.length || 0) > 1 ? 'Logout All' : 'Logout'}</span>
               </button>
             </div>
           </div>
@@ -186,16 +345,33 @@ const Dashboard: React.FC<DashboardProps> = ({
         <div className="bg-white shadow rounded-lg">
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between mb-4">
-              <select
-                value={accountFilter}
-                onChange={e => setAccountFilter(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="All Accounts">All Accounts</option>
-                {sessionInfo?.accounts.map(acc => (
-                  <option key={acc.email} value={acc.email}>{acc.email}</option>
-                ))}
-              </select>
+              {/* Only show account dropdown when there are multiple accounts */}
+              {sessionInfo && sessionInfo.accounts.length > 1 ? (
+                <select
+                  value={activeAccount}
+                  onChange={e => {
+                    const newFilter = e.target.value;
+                    console.log('Account filter changed:', { from: activeAccount, to: newFilter });
+                    
+                    // Update both accountFilter and activeAccount
+                    setAccountFilter(newFilter);
+                    setActiveAccount(newFilter);
+                  }}
+                  className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="All Accounts">All Accounts</option>
+                  {sessionInfo.accounts.map(acc => (
+                    <option key={acc.email} value={acc.email}>{acc.email}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="text-sm text-gray-600">
+                  {sessionInfo?.accounts.length === 1 
+                    ? `Account: ${sessionInfo.accounts[0].email}`
+                    : 'No accounts available'
+                  }
+                </div>
+              )}
               <div className="flex items-center space-x-2">
                 <button
                   onClick={handleRefresh}
@@ -281,32 +457,103 @@ const Dashboard: React.FC<DashboardProps> = ({
                 {sortedCategories.map((category) => (
                   <div
                     key={category.id}
-                    onClick={() => {
-                      navigate(`/category/${category.id}`);
-                      setNewEmailCategories(newEmailCategories.filter(id => id !== category.id));
-                    }}
-                    className="bg-gray-50 rounded-lg p-4 cursor-pointer hover:bg-gray-100 transition-colors relative"
+                    className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors relative"
                   >
-                    <h3 className="text-lg font-medium text-gray-900 flex items-center justify-between">
-                      {category.name}
-                      <span className="ml-2 inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 py-1 rounded-full text-sm font-bold bg-blue-600 text-white shadow">
-                        {emailCounts[category.id] ?? 0}
-                      </span>
-                      {/* Mail icon with pulse for new emails */}
-                      {newEmailCategories.includes(category.id) && (
-                        <span className="absolute top-2 right-2">
-                          <Mail className="w-5 h-5 text-blue-500 animate-pulse" />
-                        </span>
-                      )}
-                    </h3>
-                    {category.description && (
-                      <p
-                        className="mt-1 text-sm text-gray-600 truncate"
-                        title={category.description}
-                        style={{ maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    {editingCategory === category.id ? (
+                      // Edit mode
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Category Name
+                            {emailCounts[category.id] > 0 && (
+                              <span className="ml-2 text-xs text-gray-500 font-normal">
+                                (Name locked - category has {emailCounts[category.id]} email(s))
+                              </span>
+                            )}
+                          </label>
+                          <input
+                            type="text"
+                            value={editCategoryName}
+                            onChange={(e) => setEditCategoryName(e.target.value)}
+                            className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
+                              emailCounts[category.id] > 0 
+                                ? 'border-gray-300 bg-gray-100 text-gray-500 cursor-not-allowed' 
+                                : 'border-gray-300'
+                            }`}
+                            placeholder="Category name"
+                            disabled={emailCounts[category.id] > 0}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Description
+                          </label>
+                          <textarea
+                            value={editCategoryDescription}
+                            onChange={(e) => setEditCategoryDescription(e.target.value)}
+                            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Category description"
+                            rows={2}
+                          />
+                        </div>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={handleSaveCategoryEdit}
+                            className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            className="px-3 py-1 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 text-sm"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      // View mode
+                      <div
+                        onClick={() => {
+                          navigate(`/category/${category.id}`);
+                          setNewEmailCategories(newEmailCategories.filter(id => id !== category.id));
+                        }}
+                        className="cursor-pointer"
                       >
-                        {category.description}
-                      </p>
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                            {category.name}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditCategory(category);
+                              }}
+                              className="ml-2 p-1 text-gray-400 hover:text-gray-600 rounded"
+                              title="Edit category (name can only be changed when empty, description can always be edited)"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                          </h3>
+                          <span className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 py-1 rounded-full text-sm font-bold bg-blue-600 text-white shadow">
+                            {emailCounts[category.id] ?? 0}
+                          </span>
+                        </div>
+                        {/* Mail icon with pulse for new emails */}
+                        {newEmailCategories.includes(category.id) && (
+                          <span className="absolute top-2 right-2">
+                            <Mail className="w-5 h-5 text-blue-500 animate-pulse" />
+                          </span>
+                        )}
+                        {category.description && (
+                          <p
+                            className="text-sm text-gray-600 truncate"
+                            title={category.description}
+                            style={{ maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          >
+                            {category.description}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}

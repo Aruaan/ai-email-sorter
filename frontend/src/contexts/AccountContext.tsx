@@ -24,7 +24,21 @@ export const AccountProvider: React.FC<AccountProviderProps> = ({
   children, 
   initialActiveAccount 
 }) => {
-  const [activeAccount, setActiveAccount] = useState(initialActiveAccount);
+  // Get stored active account from localStorage, fallback to initialActiveAccount
+  const storedAccount = localStorage.getItem('activeAccount');
+  const [activeAccount, setActiveAccountState] = useState(storedAccount || initialActiveAccount);
+
+  const setActiveAccount = (email: string) => {
+    setActiveAccountState(email);
+    localStorage.setItem('activeAccount', email);
+  };
+
+  // Update active account when initialActiveAccount changes (e.g., fresh login)
+  React.useEffect(() => {
+    if (initialActiveAccount && initialActiveAccount !== activeAccount) {
+      setActiveAccount(initialActiveAccount);
+    }
+  }, [initialActiveAccount]);
 
   return (
     <AccountContext.Provider value={{ activeAccount, setActiveAccount }}>

@@ -1,11 +1,12 @@
 from pydantic import BaseModel
 from typing import Optional, Dict
+import uuid
 
 class Email(BaseModel):
-    id: int
+    id: Optional[uuid.UUID] = None
     subject: str
     from_email: str
-    category_id: int
+    category_id: uuid.UUID
     summary: str
     raw: str
     user_email: str

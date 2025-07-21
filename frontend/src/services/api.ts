@@ -35,16 +35,30 @@ export const categoriesAPI = {
   createCategory: async (name: string, description: string, sessionId: string): Promise<Category> => {
     const res = await api.post('/categories/', { name, description, session_id: sessionId });
     return res.data;
+  },
+  updateCategory: async (categoryId: string, name?: string, description?: string): Promise<any> => {
+    const payload: any = {};
+    if (name !== undefined) payload.name = name;
+    if (description !== undefined) payload.description = description;
+    const res = await api.put(`/categories/${categoryId}`, payload);
+    return res.data;
   }
 };
 
 // Emails API
 export const emailsAPI = {
-  getEmails: async (sessionId: string, categoryId: number): Promise<Email[]> => {
-    const res = await api.get(`/emails/?session_id=${sessionId}&category_id=${categoryId}`);
+  getEmails: async (sessionId: string, categoryId: string, userEmail?: string): Promise<Email[]> => {
+    const params = new URLSearchParams({ 
+      session_id: sessionId, 
+      category_id: categoryId
+    });
+    if (userEmail) {
+      params.append('user_email', userEmail);
+    }
+    const res = await api.get(`/emails/?${params}`);
     return res.data;
   },
-  getUnsubscribeLinks: async (emailIds: number[]): Promise<UnsubscribeResult[]> => {
+  getUnsubscribeLinks: async (emailIds: string[]): Promise<UnsubscribeResult[]> => {
     const res = await api.post('/emails/unsubscribe', emailIds);
     return res.data;
   },
@@ -53,6 +67,17 @@ export const emailsAPI = {
     if (email) params.append('email', email);
     const res = await api.get(`/dev/process-emails?${params}`);
     return res.data;
+  },
+  aiUnsubscribe: async (unsubscribeLinks: string[], userEmail?: string) => {
+    const res = await api.post('/emails/unsubscribe/ai', {
+      unsubscribe_links: unsubscribeLinks,
+      user_email: userEmail,
+    });
+    return res.data;
+  },
+  deleteEmails: async (emailIds: string[]): Promise<any> => {
+    const res = await api.delete('/emails/', { data: emailIds });
+    return res.data;
   }
 };
 
@@ -60,6 +85,10 @@ export const emailsAPI = {
 export const sessionAPI = {
   getSessionAccounts: async (sessionId: string) => {
     const res = await api.get(`/dev/session/${sessionId}/accounts`);
+    return res.data;
+  },
+  removeAccount: async (sessionId: string, email: string) => {
+    const res = await api.delete(`/auth/session/${sessionId}/account?email=${encodeURIComponent(email)}`);
     return res.data;
   }
 }; 

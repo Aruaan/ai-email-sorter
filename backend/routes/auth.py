@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Request, Response, status, Query
 from fastapi.responses import RedirectResponse
 from utils.google_oauth import get_auth_url, fetch_token, get_user_email
-from services.fake_db import create_user_session, add_account_to_session, get_user_session, get_session_accounts, set_primary_account, setup_gmail_watch_for_user
-from models.user import UserToken
+from services.session_db import create_session, add_account_to_session, get_session, get_session_accounts, set_primary_account, get_primary_account
 import os
 
 router = APIRouter()
@@ -36,19 +35,25 @@ def google_callback(request: Request, code: str = "", state: str = ""):
     if state and state.startswith("add_account:"):
         session_id = state.split(":", 1)[1]
         # Set up Gmail watch for the new account
+        from services.session_db import setup_gmail_watch_for_user
         history_id = setup_gmail_watch_for_user(email, access_token, refresh_token)
-        success = add_account_to_session(session_id, email, access_token, refresh_token, history_id)
-        if success:
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-            redirect_url = f"{frontend_url}/dashboard?session_id={session_id}&account_added={email}"
-            return RedirectResponse(url=redirect_url)
-        else:
-            return Response(content="Failed to add account to session", status_code=status.HTTP_400_BAD_REQUEST)
+        add_account_to_session(session_id, email, access_token, refresh_token, history_id)
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        redirect_url = f"{frontend_url}/dashboard?session_id={session_id}&account_added={email}"
+        return RedirectResponse(url=redirect_url)
     
-    # Create new session for first-time login
-    # Set up Gmail watch and get initial history ID
+    # Set up Gmail watch for the user
+    from services.session_db import setup_gmail_watch_for_user
     history_id = setup_gmail_watch_for_user(email, access_token, refresh_token)
-    session_id = create_user_session(email, access_token, refresh_token, history_id)
+    
+    # Get existing session for this email or create a new one
+    from services.session_db import get_or_create_session_by_email
+    session_id = get_or_create_session_by_email(email, access_token, refresh_token, history_id)
+    print(f"[AUTH] Using session {session_id} for user {email}")
+    
+    # Get or create "Uncategorized" category for this session
+    from services.session_db import get_or_create_uncategorized_category
+    uncategorized_category = get_or_create_uncategorized_category(email, session_id)
     
     # Redirect to frontend with session info
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -58,12 +63,12 @@ def google_callback(request: Request, code: str = "", state: str = ""):
 @router.get("/session/{session_id}")
 def get_session_info(session_id: str):
     """Get session information including all accounts"""
-    session = get_user_session(session_id)
+    session = get_session(session_id)
     if not session:
         return Response(content="Session not found", status_code=status.HTTP_404_NOT_FOUND)
     
     return {
-        "session_id": session.session_id,
+        "session_id": session.id,
         "accounts": [{"email": acc.email} for acc in session.accounts],
         "primary_account": session.primary_account
     }
@@ -75,4 +80,26 @@ def set_primary_account_endpoint(session_id: str, email: str = Query(...)):
     if not success:
         return Response(content="Account not found in session", status_code=status.HTTP_404_NOT_FOUND)
     
-    return {"message": f"Primary account set to {email}"} 
+    return {"message": f"Primary account set to {email}"}
+
+@router.delete("/session/{session_id}/account")
+def remove_account_endpoint(session_id: str, email: str = Query(...)):
+    """Remove an account from a session"""
+    from services.session_db import remove_account_from_session
+    
+    success, message = remove_account_from_session(session_id, email)
+    if not success:
+        return Response(content=message, status_code=status.HTTP_400_BAD_REQUEST)
+    
+    return {"message": message, "removed_email": email}
+
+@router.post("/logout")
+def logout_endpoint(session_id: str = Query(...)):
+    """Logout and clear session data"""
+    from services.session_db import delete_session
+    
+    success = delete_session(session_id)
+    if success:
+        return {"message": "Logged out successfully and session cleared"}
+    else:
+        return {"message": "Logged out successfully"} 
