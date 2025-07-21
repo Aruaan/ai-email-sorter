@@ -38,10 +38,12 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [removingAccount, setRemovingAccount] = useState<string | null>(null);
   // Add ref for the dropdown button
   const dropdownButtonRef = useRef<HTMLButtonElement>(null);
-  // Add state for category editing
-  const [editingCategory, setEditingCategory] = useState<string | null>(null);
-  const [editCategoryName, setEditCategoryName] = useState('');
-  const [editCategoryDescription, setEditCategoryDescription] = useState('');
+  // Remove all edit-related state and handlers
+  // Remove handleEditCategory, handleSaveCategoryEdit, handleCancelEdit, editingCategory, editCategoryName, editCategoryDescription
+  // Remove edit button and edit form in the category list
+  // Only display category name and description
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastTimeout, setToastTimeout] = useState<number | null>(null);
 
   useEffect(() => {
     loadCategories();
@@ -159,8 +161,9 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  const BASE_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : 'https://ai-email-sorter-1-1jhi.onrender.com';
   const handleAddAccount = () => {
-    authAPI.addAccount(sessionId);
+    window.location.assign(`${BASE_URL}/auth/google/add-account?session_id=${sessionId}`);
   };
 
   const handleRemoveAccount = async (email: string) => {
@@ -218,38 +221,10 @@ const Dashboard: React.FC<DashboardProps> = ({
     setTimeout(() => setIsRefreshing(false), 500); // short delay for feedback
   };
 
-  const handleEditCategory = (category: Category) => {
-    setEditingCategory(category.id);
-    setEditCategoryName(category.name);
-    setEditCategoryDescription(category.description || '');
-  };
-
-  const handleSaveCategoryEdit = async () => {
-    if (!editingCategory) return;
-
-    try {
-      const result = await categoriesAPI.updateCategory(editingCategory, editCategoryName, editCategoryDescription);
-      
-      if (result.error) {
-        alert(result.error);
-        return;
-      }
-      
-      setEditingCategory(null);
-      setEditCategoryName('');
-      setEditCategoryDescription('');
-      await loadCategories(); // Reload to show updated data
-    } catch (error) {
-      console.error('Failed to update category:', error);
-      alert('Failed to update category. Please try again.');
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setEditingCategory(null);
-    setEditCategoryName('');
-    setEditCategoryDescription('');
-  };
+  // Remove all edit-related state and handlers
+  // Remove handleEditCategory, handleSaveCategoryEdit, handleCancelEdit, editingCategory, editCategoryName, editCategoryDescription
+  // Remove edit button and edit form in the category list
+  // Only display category name and description
 
   if (isLoading) {
     return (
@@ -459,102 +434,38 @@ const Dashboard: React.FC<DashboardProps> = ({
                     key={category.id}
                     className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors relative"
                   >
-                    {editingCategory === category.id ? (
-                      // Edit mode
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Category Name
-                            {emailCounts[category.id] > 0 && (
-                              <span className="ml-2 text-xs text-gray-500 font-normal">
-                                (Name locked - category has {emailCounts[category.id]} email(s))
-                              </span>
-                            )}
-                          </label>
-                          <input
-                            type="text"
-                            value={editCategoryName}
-                            onChange={(e) => setEditCategoryName(e.target.value)}
-                            className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
-                              emailCounts[category.id] > 0 
-                                ? 'border-gray-300 bg-gray-100 text-gray-500 cursor-not-allowed' 
-                                : 'border-gray-300'
-                            }`}
-                            placeholder="Category name"
-                            disabled={emailCounts[category.id] > 0}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Description
-                          </label>
-                          <textarea
-                            value={editCategoryDescription}
-                            onChange={(e) => setEditCategoryDescription(e.target.value)}
-                            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="Category description"
-                            rows={2}
-                          />
-                        </div>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={handleSaveCategoryEdit}
-                            className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={handleCancelEdit}
-                            className="px-3 py-1 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 text-sm"
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                    {/* View mode */}
+                    <div
+                      onClick={() => {
+                        navigate(`/category/${category.id}`);
+                        setNewEmailCategories(newEmailCategories.filter(id => id !== category.id));
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                          {category.name}
+                        </h3>
+                        <span className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 py-1 rounded-full text-sm font-bold bg-blue-600 text-white shadow">
+                          {emailCounts[category.id] ?? 0}
+                        </span>
                       </div>
-                    ) : (
-                      // View mode
-                      <div
-                        onClick={() => {
-                          navigate(`/category/${category.id}`);
-                          setNewEmailCategories(newEmailCategories.filter(id => id !== category.id));
-                        }}
-                        className="cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-lg font-medium text-gray-900 flex items-center">
-                            {category.name}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditCategory(category);
-                              }}
-                              className="ml-2 p-1 text-gray-400 hover:text-gray-600 rounded"
-                              title="Edit category (name can only be changed when empty, description can always be edited)"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                          </h3>
-                          <span className="inline-flex items-center justify-center min-w-[2.5rem] h-8 px-3 py-1 rounded-full text-sm font-bold bg-blue-600 text-white shadow">
-                            {emailCounts[category.id] ?? 0}
-                          </span>
-                        </div>
-                        {/* Mail icon with pulse for new emails */}
-                        {newEmailCategories.includes(category.id) && (
-                          <span className="absolute top-2 right-2">
-                            <Mail className="w-5 h-5 text-blue-500 animate-pulse" />
-                          </span>
-                        )}
-                        {category.description && (
-                          <p
-                            className="text-sm text-gray-600 truncate"
-                            title={category.description}
-                            style={{ maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                          >
-                            {category.description}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                      {/* Mail icon with pulse for new emails */}
+                      {newEmailCategories.includes(category.id) && (
+                        <span className="absolute top-2 right-2">
+                          <Mail className="w-5 h-5 text-blue-500 animate-pulse" />
+                        </span>
+                      )}
+                      {category.description && (
+                        <p
+                          className="text-sm text-gray-600 truncate"
+                          title={category.description}
+                          style={{ maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                        >
+                          {category.description}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -562,6 +473,12 @@ const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       </main>
+      {/* Toast Banner */}
+      {toastMessage && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded shadow-lg z-50 transition-all">
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 };

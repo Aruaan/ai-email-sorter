@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, Response, status, Query
 from fastapi.responses import RedirectResponse
-from utils.google_oauth import get_auth_url, fetch_token, get_user_email
-from services.session_db import create_session, add_account_to_session, get_session, get_session_accounts, set_primary_account, get_primary_account
+from backend.utils.google_oauth import get_auth_url, fetch_token, get_user_email
+from backend.services.session_db import add_account_to_session, get_session, set_primary_account
 import os
 
 router = APIRouter()
@@ -35,7 +35,7 @@ def google_callback(request: Request, code: str = "", state: str = ""):
     if state and state.startswith("add_account:"):
         session_id = state.split(":", 1)[1]
         # Set up Gmail watch for the new account
-        from services.session_db import setup_gmail_watch_for_user
+        from backend.services.session_db import setup_gmail_watch_for_user
         history_id = setup_gmail_watch_for_user(email, access_token, refresh_token)
         add_account_to_session(session_id, email, access_token, refresh_token, history_id)
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -43,16 +43,16 @@ def google_callback(request: Request, code: str = "", state: str = ""):
         return RedirectResponse(url=redirect_url)
     
     # Set up Gmail watch for the user
-    from services.session_db import setup_gmail_watch_for_user
+    from backend.services.session_db import setup_gmail_watch_for_user
     history_id = setup_gmail_watch_for_user(email, access_token, refresh_token)
     
-    # Get existing session for this email or create a new one
-    from services.session_db import get_or_create_session_by_email
-    session_id = get_or_create_session_by_email(email, access_token, refresh_token, history_id)
+    # Always create a new session for this login
+    from backend.services.session_db import get_or_create_session_by_email
+    session_id = get_or_create_session_by_email(email, access_token, refresh_token, history_id, force_new=True)
     print(f"[AUTH] Using session {session_id} for user {email}")
     
     # Get or create "Uncategorized" category for this session
-    from services.session_db import get_or_create_uncategorized_category
+    from backend.services.session_db import get_or_create_uncategorized_category
     uncategorized_category = get_or_create_uncategorized_category(email, session_id)
     
     # Redirect to frontend with session info
@@ -85,7 +85,7 @@ def set_primary_account_endpoint(session_id: str, email: str = Query(...)):
 @router.delete("/session/{session_id}/account")
 def remove_account_endpoint(session_id: str, email: str = Query(...)):
     """Remove an account from a session"""
-    from services.session_db import remove_account_from_session
+    from backend.services.session_db import remove_account_from_session
     
     success, message = remove_account_from_session(session_id, email)
     if not success:
@@ -96,7 +96,7 @@ def remove_account_endpoint(session_id: str, email: str = Query(...)):
 @router.post("/logout")
 def logout_endpoint(session_id: str = Query(...)):
     """Logout and clear session data"""
-    from services.session_db import delete_session
+    from backend.services.session_db import delete_session
     
     success = delete_session(session_id)
     if success:

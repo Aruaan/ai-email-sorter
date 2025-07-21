@@ -1,10 +1,12 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
-from database.db import Base
+from backend.database.db import Base
 import uuid
+from sqlalchemy.orm import relationship
 
 class Category(Base):
     __tablename__ = "categories"
+    __table_args__ = {'extend_existing': True}
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
@@ -12,6 +14,7 @@ class Category(Base):
 
 class Email(Base):
     __tablename__ = "emails"
+    __table_args__ = {'extend_existing': True}
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     subject = Column(String, nullable=False)
     from_email = Column(String, nullable=False)
@@ -22,21 +25,20 @@ class Email(Base):
     gmail_id = Column(String, nullable=False)
     headers = Column(Text, nullable=True)  # Store headers as JSON string for SQLite compatibility
 
-# --- New persistent session management models ---
-from sqlalchemy.orm import relationship
-
 class Session(Base):
     __tablename__ = "sessions"
+    __table_args__ = {'extend_existing': True}
     id = Column(String, primary_key=True, index=True)  # session_id (UUID)
     primary_account = Column(String, nullable=False)
-    accounts = relationship("SessionAccount", back_populates="session", cascade="all, delete-orphan")
+    accounts = relationship("backend.database.models.SessionAccount", back_populates="session", cascade="all, delete-orphan")
 
 class SessionAccount(Base):
     __tablename__ = "session_accounts"
+    __table_args__ = {'extend_existing': True}
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     session_id = Column(String, ForeignKey("sessions.id"), nullable=False)
     email = Column(String, nullable=False)
     access_token = Column(String, nullable=False)
     refresh_token = Column(String, nullable=True)
     history_id = Column(String, nullable=True)
-    session = relationship("Session", back_populates="accounts")
+    session = relationship("backend.database.models.Session", back_populates="accounts")

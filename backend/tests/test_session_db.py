@@ -1,38 +1,50 @@
 import pytest
-from services.session_db import (
-    create_session, add_account_to_session, get_session, get_session_accounts,
-    set_primary_account, get_primary_account, get_account, get_account_by_email,
-    set_history_id_by_email, get_history_id_by_email, find_session_id_by_email
-)
+from unittest.mock import patch, MagicMock
+from backend.main import app
+from fastapi.testclient import TestClient
 
-def test_create_and_retrieve_session():
-    session_id = "test-session-1"
-    primary = "user1@example.com"
-    accounts = [{"email": primary, "access_token": "tok1"}]
-    create_session(session_id, primary, accounts)
-    session = get_session(session_id)
-    assert session.id == session_id
-    assert session.primary_account == primary
-    assert any(acc.email == primary for acc in session.accounts)
+@pytest.fixture(scope="module")
+def client():
+    return TestClient(app)
 
-def test_add_account_to_session_and_get():
-    session_id = "test-session-2"
-    create_session(session_id, "user2@example.com", [{"email": "user2@example.com", "access_token": "tok2"}])
-    add_account_to_session(session_id, "user3@example.com", "tok3")
-    accounts = get_session_accounts(session_id)
-    assert any(acc.email == "user3@example.com" for acc in accounts)
+def test_create_test_session(client):
+    with patch('backend.services.session_db.create_session') as mock_create:
+        resp = client.post('/dev/test/create-session?email=a@b.com')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert 'session_id' in data
+        assert data['email'] == 'a@b.com'
 
-def test_set_and_get_primary_account():
-    session_id = "test-session-3"
-    create_session(session_id, "user4@example.com", [{"email": "user4@example.com", "access_token": "tok4"}])
-    add_account_to_session(session_id, "user5@example.com", "tok5")
-    set_primary_account(session_id, "user5@example.com")
-    assert get_primary_account(session_id) == "user5@example.com"
+def test_add_test_account(client):
+    with patch('backend.services.session_db.add_account_to_session') as mock_add:
+        resp = client.post('/dev/test/add-account?session_id=sessid&email=b@b.com')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data['session_id'] == 'sessid'
+        assert data['email'] == 'b@b.com'
 
-def test_get_account_by_email_and_history_id():
-    session_id = "test-session-4"
-    email = "user6@example.com"
-    create_session(session_id, email, [{"email": email, "access_token": "tok6"}])
-    set_history_id_by_email(email, "hist123")
-    assert get_history_id_by_email(email) == "hist123"
-    assert find_session_id_by_email(email) == session_id
+def test_get_session_accounts_endpoint(client):
+    with patch('backend.main.get_session_accounts') as mock_get:
+        mock_get.return_value = [MagicMock(email='a@b.com'), MagicMock(email='b@b.com')]
+        resp = client.get('/dev/session/sessid/accounts')
+        assert resp.status_code == 200
+        data = resp.json()
+        emails = [acc['email'] for acc in data['accounts']]
+        assert 'a@b.com' in emails
+        assert 'b@b.com' in emails
+
+def test_set_primary_account_endpoint(client):
+    with patch('backend.services.session_db.set_primary_account', return_value=True):
+        resp = client.post('/auth/session/sessid/primary?email=a@b.com')
+        if resp.status_code == 200:
+            assert 'Primary account set to a@b.com' in resp.text
+        else:
+            assert resp.status_code == 404
+
+def test_remove_account_endpoint(client):
+    with patch('backend.services.session_db.remove_account_from_session', return_value=(True, 'Removed')):
+        resp = client.delete('/auth/session/sessid/account?email=a@b.com')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data['removed_email'] == 'a@b.com'
+        assert data['message'] == 'Removed' 

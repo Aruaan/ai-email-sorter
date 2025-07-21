@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Query, Body
 from typing import List
-from models.email import Email
-from services.session_db import get_emails_by_user_and_category, email_exists, save_email
-from services.session_db import get_session_accounts
-from utils.unsubscribe import extract_unsubscribe_links
-from services.unsubscribe_worker import batch_unsubscribe_worker
+from backend.models.email import Email
+from backend.services.session_db import get_emails_by_user_and_category, email_exists, save_email
+from backend.services.session_db import get_session_accounts
+from backend.utils.unsubscribe import extract_unsubscribe_links
+from backend.services.unsubscribe_worker import batch_unsubscribe_worker
 from email.parser import HeaderParser
 
 router = APIRouter()
@@ -35,7 +35,7 @@ def list_emails(session_id: str = Query(...), category_id: str = Query(...), use
             
             # If this is the "Uncategorized" category, also include orphaned emails (emails with invalid category_ids)
             if category_id and "uncategorized" in category_id.lower():
-                from services.session_db import get_emails_by_user_email, get_categories_by_session
+                from backend.services.session_db import get_emails_by_user_email, get_categories_by_session
                 all_user_emails = get_emails_by_user_email(user_email)
                 
                 # Get all valid category IDs for this session
@@ -84,8 +84,8 @@ def unsubscribe_from_emails(email_ids: list = Body(...)):
     print("DEBUG: Received unsubscribe request for email_ids:", email_ids)
     results = []
     for eid in email_ids:
-        from database.db import SessionLocal
-        from database.models import Email as DBEmail
+        from backend.database.db import SessionLocal
+        from backend.database.models import Email as DBEmail
         import json
         db = SessionLocal()
         db_email = db.query(DBEmail).filter(DBEmail.id == eid).first()
@@ -107,7 +107,7 @@ def unsubscribe_from_emails(email_ids: list = Body(...)):
             print("DEBUG: Email raw (first 200 chars):", db_email.raw[:200])
             
             # Create Email object for unsubscribe processing
-            from models.email import Email
+            from backend.models.email import Email
             email_obj = Email(
                 id=db_email.id,
                 subject=db_email.subject,
@@ -140,8 +140,8 @@ def ai_unsubscribe_from_links(payload: dict = Body(...)):
 @router.delete("/")
 def delete_emails(email_ids: list = Body(...)):
     """Delete multiple emails by their IDs"""
-    from database.db import SessionLocal
-    from database.models import Email as DBEmail
+    from backend.database.db import SessionLocal
+    from backend.database.models import Email as DBEmail
     
     db = SessionLocal()
     deleted_count = 0

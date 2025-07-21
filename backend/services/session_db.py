@@ -1,5 +1,5 @@
-from database.db import SessionLocal
-from database.models import Session as DBSession, SessionAccount as DBSessionAccount, Category as DBCategory, Email as DBEmail
+from backend.database.db import SessionLocal
+from backend.database.models import Session as DBSession, SessionAccount as DBSessionAccount, Category as DBCategory, Email as DBEmail
 from sqlalchemy.orm import joinedload
 import json
 import os
@@ -104,7 +104,7 @@ def get_emails_by_user_and_category(user_email: str, category_id: str):
         # If category_id is not a valid UUID, return empty list
         db_emails = []
     db.close()
-    from models.email import Email
+    from backend.models.email import Email
     return [Email(
         id=e.id,
         subject=e.subject,
@@ -122,7 +122,7 @@ def get_emails_by_user_email(user_email: str):
     db = SessionLocal()
     db_emails = db.query(DBEmail).filter(DBEmail.user_email == user_email).all()
     db.close()
-    from models.email import Email
+    from backend.models.email import Email
     return [Email(
         id=e.id,
         subject=e.subject,
@@ -254,31 +254,27 @@ def find_session_id_by_email(email):
     db.close()
     return acc.session_id if acc else None
 
-def get_or_create_session_by_email(email, access_token, refresh_token=None, history_id=None):
-    """Get existing session for email or create new one. Returns session_id."""
+def get_or_create_session_by_email(email, access_token, refresh_token=None, history_id=None, force_new=False):
+    """Get existing session for email or create new one. Returns session_id. If force_new, always create a new session."""
     db = SessionLocal()
-    
-    # Try to find existing session for this email
-    existing_account = db.query(DBSessionAccount).filter_by(email=email).first()
-    
-    if existing_account:
-        # Update tokens for existing account
-        existing_account.access_token = access_token
-        existing_account.refresh_token = refresh_token
-        if history_id:
-            existing_account.history_id = history_id
-        session_id = existing_account.session_id  # Access before closing session
-        db.commit()
-        db.close()
-        print(f"[SESSION] Reusing existing session {session_id} for {email}")
-        return session_id
-    
-    # Create new session if none exists
+    from backend.database.models import Session as DBSession, SessionAccount as DBSessionAccount
     import uuid
+    if not force_new:
+        acc = db.query(DBSessionAccount).filter_by(email=email).first()
+        if acc:
+            session_id = acc.session_id
+            # Update tokens if needed
+            acc.access_token = access_token
+            acc.refresh_token = refresh_token
+            acc.history_id = history_id
+            db.commit()
+            db.close()
+            return session_id
+    # Create new session
     session_id = str(uuid.uuid4())
-    db_session = DBSession(id=session_id, primary_account=email)
-    db.add(db_session)
-    
+    session = DBSession(id=session_id, primary_account=email)
+    db.add(session)
+    db.commit()
     db_account = DBSessionAccount(
         session_id=session_id,
         email=email,
@@ -289,8 +285,6 @@ def get_or_create_session_by_email(email, access_token, refresh_token=None, hist
     db.add(db_account)
     db.commit()
     db.close()
-    
-    print(f"[SESSION] Created new session {session_id} for {email}")
     return session_id
 
 def remove_account_from_session(session_id, email):
@@ -329,7 +323,7 @@ def get_or_create_uncategorized_category(user_email: str, session_id: str):
     db = SessionLocal()
     
     # First, try to find an existing "Uncategorized" category for this session
-    from database.models import Category as DBCategory
+    from backend.database.models import Category as DBCategory
     
     # Look for an "Uncategorized" category in this session
     existing_uncategorized = db.query(DBCategory).filter(
@@ -350,7 +344,7 @@ def get_or_create_uncategorized_category(user_email: str, session_id: str):
         # Migrate any orphaned emails to this category
         migrate_orphaned_emails_to_uncategorized(session_id)
         
-        from models.category import Category
+        from backend.models.category import Category
         return Category(
             id=category_id,
             name=category_name,
@@ -380,7 +374,7 @@ def get_or_create_uncategorized_category(user_email: str, session_id: str):
     # Migrate any orphaned emails to this new category
     migrate_orphaned_emails_to_uncategorized(session_id)
     
-    from models.category import Category
+    from backend.models.category import Category
     return Category(
         id=category_id,
         name=category_name,
@@ -392,7 +386,7 @@ def migrate_orphaned_emails_to_uncategorized(session_id: str):
     """Migrate emails with invalid category_ids to the session's Uncategorized category"""
     db = SessionLocal()
     try:
-        from database.models import Category as DBCategory, Email as DBEmail
+        from backend.database.models import Category as DBCategory, Email as DBEmail
         
         # Get the Uncategorized category for this session
         uncategorized_category = db.query(DBCategory).filter(
@@ -443,7 +437,7 @@ def delete_session(session_id):
         account_emails = [acc.email for acc in accounts]
         
         # Delete categories for this session (emails will become orphaned but that's okay)
-        from database.models import Category as DBCategory
+        from backend.database.models import Category as DBCategory
         categories = db.query(DBCategory).filter_by(session_id=session_id).all()
         for category in categories:
             db.delete(category)

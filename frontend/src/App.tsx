@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
+import { Routes, Route, Navigate, useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import CategoryView from './pages/CategoryView';
@@ -24,10 +24,8 @@ const CallbackHandler: React.FC<{ onLogin: (email: string, sessionId: string) =>
     
     // Handle account added notification first
     if (accountAdded && sessionId) {
-      console.log('Account added notification:', accountAdded);
+      // No alert, just redirect to dashboard
       setHasProcessed(true);
-      alert(`Account ${accountAdded} added successfully!`);
-      // Redirect to dashboard
       window.location.href = '/';
       return;
     }
@@ -67,6 +65,10 @@ function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastTimeout, setToastTimeout] = useState<number | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Check for stored session info on app start
@@ -92,6 +94,20 @@ function App() {
       setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    // Check for account_cancelled param
+    const params = new URLSearchParams(location.search);
+    if (params.get('account_cancelled')) {
+      setToastMessage('Account addition cancelled.');
+      if (toastTimeout) clearTimeout(toastTimeout);
+      const timeout = window.setTimeout(() => setToastMessage(null), 4000);
+      setToastTimeout(timeout);
+      // Remove the param from the URL
+      params.delete('account_cancelled');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
+  }, [location.search]);
 
   const handleLogin = (email: string, sessionId: string) => {
     setUserEmail(email);
@@ -131,6 +147,11 @@ function App() {
   return (
     <AccountProvider key={sessionId || 'no-session'} initialActiveAccount={sessionInfo?.primary_account || userEmail || ''}>
       <div className="App">
+        {toastMessage && (
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded shadow-lg z-50 transition-all">
+            {toastMessage}
+          </div>
+        )}
         <Routes>
           <Route 
             path="/login" 
@@ -176,6 +197,7 @@ function App() {
               )
             } 
           />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </AccountProvider>

@@ -1,4 +1,3 @@
-import sys
 import asyncio
 from playwright.async_api import async_playwright
 import openai
@@ -351,6 +350,7 @@ async def unsubscribe_link_worker_async(unsubscribe_url, user_email=None):
 async def batch_unsubscribe_worker_async(unsubscribe_links, user_email=None):
     results = []
     batch_limit = 10
+    seen_links = set()
     for i, link in enumerate(unsubscribe_links):
         if i >= batch_limit:
             results.append({"success": False, "reason": "Batch limit exceeded (10 per call)", "link": link})
@@ -358,6 +358,10 @@ async def batch_unsubscribe_worker_async(unsubscribe_links, user_email=None):
         if not link or not link.startswith("http"):
             results.append({"success": False, "reason": "Invalid link", "link": link})
             continue
+        if link in seen_links:
+            results.append({"success": True, "reason": "Duplicate link, already unsubscribed in this batch", "link": link, "duplicate": True})
+            continue
+        seen_links.add(link)
         result = await unsubscribe_link_worker_async(link, user_email)
         result["link"] = link
         results.append(result)

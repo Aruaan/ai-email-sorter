@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Category, Email, UnsubscribeResult, SessionInfo } from '../types';
 
-const BASE_URL = "https://ai-email-sorter-1-1jhi.onrender.com";
+const BASE_URL = "http://https://ai-email-sorter-1-1jhi.onrender.com:8000";
 
 const api = axios.create({
   baseURL: BASE_URL || 'http://localhost:8000',

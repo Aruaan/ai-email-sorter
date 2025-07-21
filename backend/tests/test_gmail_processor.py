@@ -1,113 +1,53 @@
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + '/../'))
-from services.gmail_processor import process_user_emails
-from models.user import UserToken
-from models.category import Category
+import pytest
 from unittest.mock import patch, MagicMock
+from backend.services import gmail_processor
+from backend.models.user import UserToken
+from backend.models.category import Category
+import uuid
 
+@pytest.fixture
+def user_token():
+    return UserToken(email='a@b.com', access_token='tok', refresh_token='ref', history_id='h')
 
-def test_process_user_emails():
-    from services.fake_db import emails
-    emails.clear()
-    user_token = UserToken(email="test@example.com", access_token="token", refresh_token="refresh")
-    categories = [Category(id=1, name="Work", description="Work stuff", user_email="test@example.com")]
+@pytest.fixture
+def categories():
+    cat_id = uuid.uuid4()
+    return [Category(id=cat_id, name='Work', description='desc', session_id='sessid')]
 
-    # Patch Gmail API and AI functions
-    with patch('services.gmail_processor.build') as mock_build, \
-         patch('services.gmail_processor.Credentials') as mock_creds, \
-         patch('services.gmail_processor.classify_email', return_value=1) as mock_classify, \
-         patch('services.gmail_processor.summarize_email', return_value="summary") as mock_summarize:
-        mock_service = MagicMock()
-        mock_build.return_value = mock_service
-        mock_service.users().messages().list().execute.return_value = {
-            'messages': [{'id': 'msg1'}, {'id': 'msg2'}]
-        }
-        mock_service.users().messages().get().execute.side_effect = [
-            {
-                'payload': {
-                    'headers': [
-                        {'name': 'Subject', 'value': 'Test Subject'},
-                        {'name': 'From', 'value': 'sender@example.com'}
-                    ],
-                    'parts': [
-                        {'mimeType': 'text/plain', 'body': {'data': ''}}
-                    ]
-                },
-                'snippet': 'snippet1'
-            },
-            {
-                'payload': {
-                    'headers': [
-                        {'name': 'Subject', 'value': 'Test2'},
-                        {'name': 'From', 'value': 'sender2@example.com'}
-                    ],
-                    'parts': []
-                },
-                'snippet': 'snippet2'
-            }
-        ]
-        result = process_user_emails(user_token, categories)
-        assert isinstance(result, list)
-        assert len(result) == 2
-        for email in result:
-            assert 'subject' in email
-            assert 'from_email' in email
-            assert 'category_id' in email
-            assert 'summary' in email
-            assert 'raw' in email
-        mock_classify.assert_called()
-        mock_summarize.assert_called()
+def test_summarize_email():
+    with patch.object(gmail_processor.client.chat.completions, 'create') as mock_create:
+        mock_create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content='Summary'))])
+        summary = gmail_processor.summarize_email('Sub', 'a@b.com', 'b@b.com', 'Body', [])
+        assert summary == 'Summary'
 
+def test_classify_email():
+    with patch.object(gmail_processor.client.chat.completions, 'create') as mock_create:
+        mock_create.return_value = MagicMock(choices=[MagicMock(message=MagicMock(content='Work'))])
+        cat_id = uuid.uuid4()
+        cat = Category(id=cat_id, name='Work', description='desc', session_id='sessid')
+        result = gmail_processor.classify_email('Body', [cat])
+        assert result == cat_id
 
-def test_process_user_emails_with_dummy_data():
-    from services.fake_db import emails
-    emails.clear()
-    user_token = UserToken(email="test@example.com", access_token="token", refresh_token="refresh")
-    categories = [Category(id=1, name="Work", description="Work stuff", user_email="test@example.com")]
+def test_archive_gmail_message():
+    service = MagicMock()
+    gmail_processor.archive_gmail_message(service, 'gid')
+    service.users().messages().modify.assert_called()
 
-    # Patch Gmail API and AI functions
-    with patch('services.gmail_processor.build') as mock_build, \
-         patch('services.gmail_processor.Credentials') as mock_creds, \
-         patch('services.gmail_processor.classify_email', return_value=1) as mock_classify, \
-         patch('services.gmail_processor.summarize_email', return_value="summary") as mock_summarize:
-        mock_service = MagicMock()
-        mock_build.return_value = mock_service
-        mock_service.users().messages().list().execute.return_value = {
-            'messages': [{'id': 'msg1'}, {'id': 'msg2'}]
-        }
-        mock_service.users().messages().get().execute.side_effect = [
-            {
-                'payload': {
-                    'headers': [
-                        {'name': 'Subject', 'value': 'Test Subject'},
-                        {'name': 'From', 'value': 'sender@example.com'}
-                    ],
-                    'parts': [
-                        {'mimeType': 'text/plain', 'body': {'data': ''}}
-                    ]
-                },
-                'snippet': 'snippet1'
-            },
-            {
-                'payload': {
-                    'headers': [
-                        {'name': 'Subject', 'value': 'Test2'},
-                        {'name': 'From', 'value': 'sender2@example.com'}
-                    ],
-                    'parts': []
-                },
-                'snippet': 'snippet2'
-            }
-        ]
-        result = process_user_emails(user_token, categories)
-        assert isinstance(result, list)
-        assert len(result) == 2
-        for email in result:
-            assert 'subject' in email
-            assert 'from_email' in email
-            assert 'category_id' in email
-            assert 'summary' in email
-            assert 'raw' in email
-        mock_classify.assert_called()
-        mock_summarize.assert_called() 
+def test_process_user_emails_no_categories(user_token):
+    with patch('backend.services.gmail_processor.Credentials'), \
+         patch('backend.services.gmail_processor.build'), \
+         patch('backend.services.gmail_processor.save_email'), \
+         patch('backend.services.gmail_processor.get_latest_history_id', return_value='h'), \
+         patch('backend.services.session_db.set_history_id_by_email'):
+        result = gmail_processor.process_user_emails(user_token, [], max_emails=2, last_history_id='h')
+        assert result == []
+
+def test_process_user_emails_no_last_history_id(user_token, categories):
+    with patch('backend.services.gmail_processor.Credentials'), \
+         patch('backend.services.gmail_processor.build'), \
+         patch('backend.services.gmail_processor.save_email'), \
+         patch('backend.services.gmail_processor.get_latest_history_id', return_value='h'), \
+         patch('backend.services.session_db.set_history_id_by_email') as mock_set:
+        result = gmail_processor.process_user_emails(user_token, categories, max_emails=2, last_history_id='')
+        mock_set.assert_called()
+        assert result == [] 

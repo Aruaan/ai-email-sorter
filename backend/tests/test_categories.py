@@ -1,43 +1,50 @@
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + '/../'))
+import pytest
 from fastapi.testclient import TestClient
-from main import app
-from unittest.mock import patch
+from backend.main import app
+from unittest.mock import patch, MagicMock
 
-client = TestClient(app)
+@pytest.fixture(scope="module")
+def client():
+    return TestClient(app)
 
-def test_create_category():
-    with patch('routes.categories.add_category') as mock_add_category:
-        data = {
-            "name": "Work",
-            "description": "Work related emails",
-            "user_email": "test@example.com"
-        }
-        response = client.post('/categories/', json=data)
-        assert response.status_code == 200
-        result = response.json()
-        assert result['name'] == data['name']
-        assert result['description'] == data['description']
-        assert result['user_email'] == data['user_email']
-        mock_add_category.assert_called()
+def test_create_category(client):
+    with patch('backend.services.session_db.add_category') as mock_add:
+        mock_add.return_value = MagicMock(id='catid', name='Work', description='desc', session_id='sessid')
+        resp = client.post('/categories/', json={"name": "Work", "description": "desc", "session_id": "sessid"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data['name'] == 'Work'
+        assert data['description'] == 'desc'
+        assert data['session_id'] == 'sessid'
 
-def test_list_categories():
-    with patch('routes.categories.get_categories_by_user', return_value=[
-        {"id": 1, "name": "Work", "description": "Work related emails", "user_email": "test@example.com"}
-    ]):
-        response = client.get('/categories/?user_email=test@example.com')
-        assert response.status_code == 200
-        categories = response.json()
-        assert isinstance(categories, list)
-        assert categories[0]['name'] == "Work" 
+def test_list_categories(client):
+    with patch('backend.services.session_db.get_categories_by_session') as mock_get:
+        mock_get.return_value = [MagicMock(id='catid', name='Work', description='desc', session_id='sessid')]
+        resp = client.get('/categories/?session_id=sessid')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, list)
+        assert data[0]['name'] == 'Work'
 
-def test_create_and_list_category():
-    from fastapi.testclient import TestClient
-    from main import app
-    client = TestClient(app)
-    session_id = "cat-session"
-    resp = client.post("/categories/", json={"name": "TestCat", "description": "desc", "session_id": session_id})
-    assert resp.status_code == 200
-    resp2 = client.get(f"/categories/?session_id={session_id}")
-    assert any(cat["name"] == "TestCat" for cat in resp2.json()) 
+def test_update_category_name_with_emails(client):
+    # Simulate category with emails (should block rename)
+    with patch('backend.database.db.SessionLocal') as mock_db:
+        db = MagicMock()
+        mock_db.return_value = db
+        cat = MagicMock(id='catid', name='Work', description='desc', session_id='sessid')
+        db.query().filter().first.return_value = cat
+        db.query().filter().count.return_value = 2  # 2 emails in category
+        resp = client.put('/categories/catid', json={"name": "NewName"})
+        assert resp.status_code == 200
+        assert 'Cannot rename category' in resp.json()['error']
+
+def test_update_category_description(client):
+    with patch('backend.database.db.SessionLocal') as mock_db:
+        db = MagicMock()
+        mock_db.return_value = db
+        cat = MagicMock(id='catid', name='Work', description='desc', session_id='sessid')
+        db.query().filter().first.return_value = cat
+        db.query().filter().count.return_value = 0
+        resp = client.put('/categories/catid', json={"description": "newdesc"})
+        assert resp.status_code == 200
+        assert resp.json()['category']['description'] == 'newdesc' 

@@ -1,11 +1,14 @@
 import os
 from google_auth_oauthlib.flow import Flow
-from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from dotenv import load_dotenv
 
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+load_dotenv(dotenv_path=dotenv_path)
+
+GOOGLE_CLIENT_ID = os.getenv("LOCAL_GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("LOCAL_GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI = os.getenv("LOCAL_GOOGLE_REDIRECT_URI")
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.modify"
