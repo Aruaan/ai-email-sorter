@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 import re
 import traceback
+
 load_dotenv()
 
 LOGIN_KEYWORDS = ["login", "sign in", "sign-in", "log in", "authentication required"]
@@ -24,21 +25,29 @@ def is_login_or_captcha(html):
 def ai_decide_actions(html):
     client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     prompt = f"""
-You are an automated agent that helps users unsubscribe from emails.
+You are an automated agent helping a user unsubscribe from email communications.
 
-From the provided HTML, extract a short list of steps needed to unsubscribe.
-Only include real actions based on what's visible in the HTML.
+From the provided HTML, extract a concise list of real steps needed to fully complete the unsubscribe process.
 
-Each step should look like:
-- Click the button with text "Unsubscribe"
-- Click the button with id="confirm-btn"
+Only list actions that are visibly present in the HTML, including:
+- Clicking buttons (e.g., Unsubscribe, Confirm, Continue, Next, Submit)
+- Selecting radio buttons or checkboxes (e.g., reason for unsubscribing)
+- Filling and submitting forms
+- Clicking links
 
-Do not invent steps. If there's no input field or confirmation button, don't include them.
+Do NOT guess. Do NOT infer actions. Only write steps if the exact elements are clearly visible in the HTML.
+
+Format each action like this:
+- Click the button with text "<actual button text>"
+- Select the radio button with text "<actual label>"
+- Fill input with name="<name>" with user email
+
+If no actions are needed, respond only with:
+No further action needed.
 
 HTML:
 {html}
 """
-
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": prompt}],
@@ -48,25 +57,49 @@ HTML:
 
 async def parse_and_execute_actions(actions, page, user_email=None, log=None):
     steps = [line.strip() for line in actions.split('\n') if line.strip()]
+    executed_steps = set()
     for step in steps:
+        if step in executed_steps:
+            continue
+        executed_steps.add(step)
         step_lower = step.lower()
-        if "click" in step_lower and "unsubscribe" in step_lower:
+
+        if "click" in step_lower:
             try:
-                btn = page.locator("text=/unsubscribe/i")
+                match = re.search(r'text \"(.+?)\"', step, re.IGNORECASE)
+                button_text = match.group(1) if match else "unsubscribe"
+                btn = page.locator(f'text=/{button_text}/i')
                 if await btn.count() > 0:
                     await btn.nth(0).click()
-                    await page.wait_for_load_state("load")
+                    await page.wait_for_timeout(2000)
                     if log is not None:
-                        log.append("Clicked 'Unsubscribe' button.")
+                        log.append(f"Clicked button with text '{button_text}'.")
                 else:
-                    raise Exception("Unsubscribe button not found")
+                    raise Exception(f"Button with text '{button_text}' not found")
             except Exception as e:
                 if log is not None:
-                    log.append(f"Failed to click 'Unsubscribe' button: {e}")
-                return False, f"Failed to click 'Unsubscribe' button: {e}"
+                    log.append(f"Failed to click button: {e}")
+                return False, f"Failed to click button: {e}"
+
+        elif "select" in step_lower and "radio" in step_lower:
+            try:
+                match = re.search(r'text \"(.+?)\"', step, re.IGNORECASE)
+                label_text = match.group(1) if match else None
+                if label_text:
+                    radio = page.locator(f'text=/{label_text}/i')
+                    if await radio.count() > 0:
+                        await radio.nth(0).click()
+                        if log is not None:
+                            log.append(f"Selected radio with label '{label_text}'.")
+                    else:
+                        raise Exception(f"Radio with text '{label_text}' not found")
+            except Exception as e:
+                if log is not None:
+                    log.append(f"Failed to select radio: {e}")
+                return False, f"Failed to select radio: {e}"
 
         elif "fill" in step_lower and "input" in step_lower:
-            match = re.search(r"fill input with name[=\"'](.*?)[\"'] with (.+)", step_lower)
+            match = re.search(r'name[=\"\'](.*?)[\"\'].*with (.+)', step_lower)
             if match:
                 input_name = match.group(1)
                 value = user_email if "user email" in match.group(2) else match.group(2)
@@ -78,21 +111,6 @@ async def parse_and_execute_actions(actions, page, user_email=None, log=None):
                     if log is not None:
                         log.append(f"Failed to fill input '{input_name}': {e}")
                     return False, f"Failed to fill input '{input_name}': {e}"
-
-        elif "confirm" in step_lower or "submit" in step_lower:
-            try:
-                if "confirm" in step_lower:
-                    await page.click("text=/confirm/i", timeout=3000)
-                    if log is not None:
-                        log.append("Clicked 'Confirm' button.")
-                elif "submit" in step_lower:
-                    await page.click("text=/submit/i", timeout=3000)
-                    if log is not None:
-                        log.append("Clicked 'Submit' button.")
-            except Exception as e:
-                if log is not None:
-                    log.append(f"Failed to click confirm/submit: {e}")
-                return False, f"Failed to click confirm/submit: {e}"
     return True, "All AI actions executed."
 
 async def check_success(page):
@@ -102,6 +120,45 @@ async def check_success(page):
             return True, f"Success message found: '{word}'"
     return False, "No success message found after actions."
 
+# Add fallback clicker for unsubscribe elements
+async def fallback_unsubscribe_click(page, log=None):
+    selectors = [
+        "text=/unsubscribe/i",
+        "a:has-text('unsubscribe')",
+        "button:has-text('unsubscribe')",
+        "input[value*=unsubscribe i]",
+        "[aria-label*=unsubscribe i]",
+        "[title*=unsubscribe i]",
+    ]
+    for sel in selectors:
+        try:
+            el = page.locator(sel)
+            if await el.count() > 0:
+                await el.nth(0).click()
+                if log is not None:
+                    log.append(f"Fallback: Clicked element with selector '{sel}'.")
+                await page.wait_for_timeout(2000)
+                return True
+        except Exception as e:
+            if log is not None:
+                log.append(f"Fallback: Failed to click '{sel}': {e}")
+    return False
+
+# Add fallback form submitter
+async def fallback_submit_form(page, log=None):
+    forms = await page.locator("form").all()
+    if len(forms) == 1:
+        try:
+            await forms[0].evaluate("form => form.submit()")
+            if log is not None:
+                log.append("Fallback: Submitted the only form on the page.")
+            await page.wait_for_timeout(2000)
+            return True
+        except Exception as e:
+            if log is not None:
+                log.append(f"Fallback: Failed to submit form: {e}")
+    return False
+
 async def unsubscribe_link_worker_async(unsubscribe_url, user_email=None):
     log = []
     try:
@@ -109,35 +166,183 @@ async def unsubscribe_link_worker_async(unsubscribe_url, user_email=None):
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
             await page.goto(unsubscribe_url, timeout=60000)
-            html = await page.content()
-            login_captcha, reason = is_login_or_captcha(html)
-            if login_captcha:
-                log.append(reason)
-                await browser.close()
-                return {
-                    "success": False,
-                    "reason": reason,
-                    "actions": None,
-                    "action_success": False,
-                    "action_msg": reason,
-                    "log": log
-                }
-            actions = ai_decide_actions(html)
-            log.append(f"AI Actions: {actions}")  # Log AI response
-            action_success, action_msg = await parse_and_execute_actions(actions, page, user_email, log)
-            if action_success:
+
+            max_steps = 5
+            step_count = 0
+            previous_actions = set()
+
+            while step_count < max_steps:
+                step_count += 1
+
+                html = await page.content()
+                log.append(f"HTML Snapshot (step {step_count}):\n{html[:2000]}...\n")
+
+                login_captcha, reason = is_login_or_captcha(html)
+                if login_captcha:
+                    log.append(reason)
+                    await page.screenshot(path=f"screenshot_login_{step_count}.png", full_page=True)
+                    await browser.close()
+                    return {
+                        "success": False,
+                        "reason": reason,
+                        "actions": None,
+                        "action_success": False,
+                        "action_msg": reason,
+                        "log": log
+                    }
+
+                actions = ai_decide_actions(html)
+                log.append(f"AI Actions: {actions}")
+
+                if actions in previous_actions:
+                    log.append("Same AI actions repeated — stopping to avoid loop.")
+                    break
+                previous_actions.add(actions)
+
+                if not actions or "no further action needed" in actions.lower():
+                    # Try fallback clicker if AI says nothing to do
+                    fallback_clicked = await fallback_unsubscribe_click(page, log)
+                    if fallback_clicked:
+                        await page.wait_for_timeout(2000)
+                        success, success_msg = await check_success(page)
+                        if success:
+                            await browser.close()
+                            return {
+                                "success": True,
+                                "reason": "Fallback unsubscribe click worked.",
+                                "actions": actions,
+                                "action_success": True,
+                                "action_msg": "Fallback click.",
+                                "log": log
+                            }
+                    # Try fallback form submit
+                    fallback_form = await fallback_submit_form(page, log)
+                    if fallback_form:
+                        await page.wait_for_timeout(2000)
+                        success, success_msg = await check_success(page)
+                        if success:
+                            await browser.close()
+                            return {
+                                "success": True,
+                                "reason": "Fallback form submit worked.",
+                                "actions": actions,
+                                "action_success": True,
+                                "action_msg": "Fallback form submit.",
+                                "log": log
+                            }
+                    break
+
+                action_success, action_msg = await parse_and_execute_actions(actions, page, user_email, log)
+                if not action_success:
+                    # Try fallback clicker if AI action fails
+                    fallback_clicked = await fallback_unsubscribe_click(page, log)
+                    if fallback_clicked:
+                        await page.wait_for_timeout(2000)
+                        success, success_msg = await check_success(page)
+                        if success:
+                            await browser.close()
+                            return {
+                                "success": True,
+                                "reason": "Fallback unsubscribe click worked after AI action failed.",
+                                "actions": actions,
+                                "action_success": True,
+                                "action_msg": "Fallback click after AI fail.",
+                                "log": log
+                            }
+                    # Try fallback form submit
+                    fallback_form = await fallback_submit_form(page, log)
+                    if fallback_form:
+                        await page.wait_for_timeout(2000)
+                        success, success_msg = await check_success(page)
+                        if success:
+                            await browser.close()
+                            return {
+                                "success": True,
+                                "reason": "Fallback form submit worked after AI action failed.",
+                                "actions": actions,
+                                "action_success": True,
+                                "action_msg": "Fallback form submit after AI fail.",
+                                "log": log
+                            }
+                    await page.screenshot(path=f"screenshot_fail_{step_count}.png", full_page=True)
+                    await browser.close()
+                    return {
+                        "success": False,
+                        "reason": action_msg,
+                        "actions": actions,
+                        "action_success": action_success,
+                        "action_msg": action_msg,
+                        "log": log
+                    }
+
                 success, success_msg = await check_success(page)
-            else:
-                success, success_msg = False, action_msg
+                if success:
+                    await browser.close()
+                    return {
+                        "success": True,
+                        "reason": success_msg,
+                        "actions": actions,
+                        "action_success": action_success,
+                        "action_msg": action_msg,
+                        "log": log
+                    }
+
+                # Fallback: check if unsubscribe button is gone
+                button_still_there = await page.locator("text=/unsubscribe/i").count() > 0
+                if button_still_there == 0:
+                    log.append("Unsubscribe button no longer visible — assuming success.")
+                    await browser.close()
+                    return {
+                        "success": True,
+                        "reason": "Unsubscribe button disappeared. Likely successful.",
+                        "actions": actions,
+                        "action_success": True,
+                        "action_msg": "All AI actions executed.",
+                        "log": log
+                    }
+
+                # Try fallback clicker if nothing else worked
+                fallback_clicked = await fallback_unsubscribe_click(page, log)
+                if fallback_clicked:
+                    await page.wait_for_timeout(2000)
+                    success, success_msg = await check_success(page)
+                    if success:
+                        await browser.close()
+                        return {
+                            "success": True,
+                            "reason": "Fallback unsubscribe click worked after all AI actions.",
+                            "actions": actions,
+                            "action_success": True,
+                            "action_msg": "Fallback click after all AI actions.",
+                            "log": log
+                        }
+                # Try fallback form submit
+                fallback_form = await fallback_submit_form(page, log)
+                if fallback_form:
+                    await page.wait_for_timeout(2000)
+                    success, success_msg = await check_success(page)
+                    if success:
+                        await browser.close()
+                        return {
+                            "success": True,
+                            "reason": "Fallback form submit worked after all AI actions.",
+                            "actions": actions,
+                            "action_success": True,
+                            "action_msg": "Fallback form submit after all AI actions.",
+                            "log": log
+                        }
+
+            await page.screenshot(path=f"screenshot_timeout_{step_count}.png", full_page=True)
             await browser.close()
             return {
-                "success": success,
-                "reason": success_msg,
+                "success": False,
+                "reason": "No success message found after actions.",
                 "actions": actions,
-                "action_success": action_success,
-                "action_msg": action_msg,
+                "action_success": True,
+                "action_msg": "All AI actions executed.",
                 "log": log
             }
+
     except Exception as e:
         tb = traceback.format_exc()
         log.append(f"Exception: {e}\n{tb}")
@@ -159,23 +364,4 @@ async def batch_unsubscribe_worker_async(unsubscribe_links, user_email=None):
     return results
 
 def batch_unsubscribe_worker(unsubscribe_links, user_email=None):
-    # Synchronous wrapper for FastAPI compatibility
     return asyncio.run(batch_unsubscribe_worker_async(unsubscribe_links, user_email))
-
-if __name__ == "__main__":
-    # Minimal Playwright environment test (async)
-    async def main():
-        print("[Playwright Test] Launching Chromium and opening example.com...")
-        try:
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page()
-                await page.goto("http://localhost:3000", timeout=15000)
-                print("[Playwright Test] Page title:", await page.title())
-                await browser.close()
-            print("[Playwright Test] Success: Playwright is working.")
-        except Exception as e:
-            import traceback
-            print("[Playwright Test] Exception:", e)
-            print(traceback.format_exc())
-    asyncio.run(main())
