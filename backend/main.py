@@ -1,6 +1,5 @@
 from dotenv import load_dotenv
 import uvicorn
-import os
 import logging
 from fastapi import FastAPI, Query, Request, Header, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +10,7 @@ from fastapi.routing import APIRoute
 from backend.routes.auth import router as auth_router
 from backend.routes.categories import router as categories_router
 from backend.routes.emails import router as emails_router
+import os
 
 # Load environment variables from .env
 load_dotenv()
