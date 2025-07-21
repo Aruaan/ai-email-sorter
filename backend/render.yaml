@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: ai-email-sorter
+    env: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
