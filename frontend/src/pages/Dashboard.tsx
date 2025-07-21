@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { categoriesAPI, authAPI, emailsAPI, sessionAPI } from '../services/api';
 import { Category, SessionInfo } from '../types';
-import { ChevronDown, Plus, Mail, LogOut, UserPlus, RefreshCw, X, Edit3 } from 'lucide-react';
+import { ChevronDown, Plus, Mail, LogOut, UserPlus, RefreshCw, X } from 'lucide-react';
 import { useAccount } from '../contexts/AccountContext';
 
 interface DashboardProps {
@@ -41,9 +41,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   // Remove all edit-related state and handlers
   // Remove handleEditCategory, handleSaveCategoryEdit, handleCancelEdit, editingCategory, editCategoryName, editCategoryDescription
   // Remove edit button and edit form in the category list
-  // Only display category name and description
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastTimeout, setToastTimeout] = useState<number | null>(null);
+
 
   useEffect(() => {
     loadCategories();
@@ -473,12 +471,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       </main>
-      {/* Toast Banner */}
-      {toastMessage && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded shadow-lg z-50 transition-all">
-          {toastMessage}
-        </div>
-      )}
+    
     </div>
   );
 };
